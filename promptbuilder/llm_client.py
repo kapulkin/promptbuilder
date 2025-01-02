@@ -113,10 +113,3 @@ class CachedLLMClient(BaseLLMClient):
         with open(cache_path, 'wt') as f:
             json.dump({'model': self.llm_client.model, 'request': messages, 'response': response}, f, indent=4)
         return response
-
-if __name__ == "__main__":
-    import dotenv
-    dotenv.load_dotenv()
-    api_key = os.getenv('FIREWORKS_API_KEY')
-    llm_client = LLMClient(api_key=api_key)
-    print(llm_client.make_request("What is the capital of France?"))
