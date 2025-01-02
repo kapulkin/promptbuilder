@@ -33,3 +33,4 @@ ENV/
 
 # Environment variables
 .env
+.pypirc
