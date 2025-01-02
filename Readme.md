@@ -4,6 +4,11 @@ Library for building prompts for LLMs.
 
 ## Installation
 
+From PyPI:
+```bash
+pip install promptbuilder
+```
+
 From source:
 ```bash
 git clone https://github.com/kapulkin/promptbuilder.git
