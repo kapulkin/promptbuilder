@@ -10,8 +10,6 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_MODEL = os.getenv('DEFAULT_MODEL')
-
 class BaseLLMClient:
     default_max_tokens = 1536
 
@@ -71,7 +69,9 @@ class BaseLLMClient:
         raise NotImplementedError
 
 class LLMClient(BaseLLMClient):
-    def __init__(self, model: str = DEFAULT_MODEL, api_key: str = None, timeout: int = 60):
+    def __init__(self, model: str = None, api_key: str = None, timeout: int = 60):
+        if model is None:
+            model = os.getenv('DEFAULT_MODEL')
         self.model = model
         provider = model.split(':')[0]
         provider_configs = { provider: {} }
