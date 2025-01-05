@@ -49,10 +49,10 @@ class PromptBuilder:
         self.prompt_template += f"{text}\n"
         return self
 
-    def structure(self, description: str | None = None):
+    def structure(self, type: Type, description: str | None = None):
         if description:
             self.prompt_template += f"{description}\n"
-        return PromptStructureBuilderContext(self)
+        self.prompt_template += f"{schema_to_ts(type)}"
     
     def set_structured_output(self, type: Type, output_name: str = "result", description: str | None = None):
         """
