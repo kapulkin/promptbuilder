@@ -1,6 +1,6 @@
 # Prompt Builder
 
-Library for building prompts for LLMs.
+Library for building prompts and agents with LLMs.
 
 ## Installation
 
@@ -22,6 +22,8 @@ pip install -e .
 - Structured output with TypeScript-like schema definition
 - LLM client with native structured output support and caching option
 - Integration with multiple LLM providers through aisuite
+- Agents with routing based on tools
+- Tools as agent for flexibility and scalability
 
 ## Quick Start
 
