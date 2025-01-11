@@ -40,6 +40,10 @@ class PromptBuilder:
         self.prompt_template += text
         return self
 
+    def header(self, header: str, level: int = 2):
+        self.prompt_template += f"\n{'#' * level} {header}\n"
+        return self
+
     def variable(self, variable_name: str):
         self.prompt_template += f"{{{variable_name}}}"
         self.variables.append(variable_name)
@@ -55,14 +59,14 @@ class PromptBuilder:
         self.prompt_template += f"{schema_to_ts(type)}"
         return self
     
-    def set_structured_output(self, type: Type, output_name: str = "result", description: str | None = None):
+    def set_structured_output(self, type: Type, output_name: str = "result"):
         """
         Set structured output for the prompt.
 
         Use create_model from pydantic to define the structure on the fly.
 
         Exmaple:
-        .set_structured_output(type=create_model(
+        builder.set_structured_output(type=create_model(
             "TodoList",
             todo_items=(List[create_model(
                 "TodoItem",
@@ -71,8 +75,6 @@ class PromptBuilder:
             )], Field())
         ))
         """
-        if description:
-            self.prompt_template += f"{description}\n"
         self.prompt_template += f"Return {output_name} in a following JSON structure:\n"
         self.prompt_template += f"{schema_to_ts(type)}\n"
         self.prompt_template += "Your output should consist solely of the JSON object, with no additional text."

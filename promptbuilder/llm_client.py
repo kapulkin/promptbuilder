@@ -24,7 +24,7 @@ class BaseLLMClient:
             **kwargs
         )
 
-    def make_json_request(self, prompt: str, temperature: float = 0.0, max_tokens: int = default_max_tokens, **kwargs) -> dict | list:
+    def make_structured_request(self, prompt: str, temperature: float = 0.0, max_tokens: int = default_max_tokens, **kwargs) -> dict | list:
         response = self.make_request(prompt, temperature, max_tokens, **kwargs)
         try:
             return self._as_json(response)
