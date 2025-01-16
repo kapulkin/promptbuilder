@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from viete.project.chat_agent.message import Message
+from promptbuilder.agent.message import Message
 
 class Context(BaseModel):
     messages: list[Message] = []

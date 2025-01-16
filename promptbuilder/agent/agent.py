@@ -105,7 +105,7 @@ class AgentRouter(Agent[ContextType]):
         )
 
     def tool(self, description: str, args_model: Optional[Type] = None):
-        def decorator(func: Callable):
+        def decorator(func: Callable[[Message, Any, Context, ...], Any]):
             tool = Tool(
                 name=func.__name__,
                 description=description,

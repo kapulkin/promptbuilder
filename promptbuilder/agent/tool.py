@@ -1,7 +1,7 @@
 from typing import Type, Callable, Any, Optional
 from pydantic import BaseModel
-from viete.project.chat_agent.context import Context
-from viete.project.chat_agent.message import Message
+from promptbuilder.agent.context import Context
+from promptbuilder.agent.message import Message
 
 
 class Tool(BaseModel):
