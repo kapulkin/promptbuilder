@@ -57,13 +57,13 @@ from promptbuilder.agent.message import Message
 from promptbuilder.llm_client import LLMClient
 
 # Define tool arguments
-class TodoItem(BaseModel):
-    description: str = Field(..., description="Description of the todo item")
-
 class AddTodoArgs(BaseModel):
     item: TodoItem = Field(..., description="Todo item to add")
 
 # Create custom context
+class TodoItem(BaseModel):
+    description: str = Field(..., description="Description of the todo item")
+
 class TodoListContext(Context):
     todos: List[TodoItem] = []
 
@@ -71,22 +71,17 @@ class TodoListContext(Context):
 class TodoListAgent(AgentRouter[TodoListContext]):
     def __init__(self, llm_client: LLMClient, context: TodoListContext):
         super().__init__(llm_client=llm_client, context=context)
-        
-        # Register tools
-        self.tool(
-            description="Add a new todo item to the list",
-            args_model=AddTodoArgs
-        )(self.add_todo)
     
-    async def add_todo(self, message: Message, args: AddTodoArgs, context: TodoListContext) -> str:
-        context.todos.append(args.item)
-        return f"Added todo item: {args.item.description}"
+llm_client = LLMClient(model="your-model", api_key="your-api-key")
+agent = TodoListAgent(llm_client=llm_client, context=TodoListContext())
+
+@agent.tool(description="Add a new todo item to the list", args_model=AddTodoArgs)
+async def add_todo(message: Message, args: AddTodoArgs, context: TodoListContext) -> str:
+    context.todos.append(args.item)
+    return f"Added todo item: {args.item.description}"
 
 # Use the agent
 async def main():
-    llm_client = LLMClient(model="your-model", api_key="your-api-key")
-    agent = TodoListAgent(llm_client=llm_client, context=TodoListContext())
-    
     response = await agent(Message(role="user", content="Add a todo: Buy groceries"))
     print(response)
 
