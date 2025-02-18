@@ -78,11 +78,11 @@ class BaseLLMClient:
         raise NotImplementedError
 
     def create_text(self, messages: List[Dict[str, str]], temperature: float = 0.0, max_tokens: int = default_max_tokens, **kwargs) -> str:
-        completion = self.create(messages, temperature, max_tokens, **kwargs)
+        completion = self.create(messages, temperature=temperature, max_tokens=max_tokens, **kwargs)
         return completion.choices[0].message.content
 
     def create_structured(self, messages: List[Dict[str, str]], temperature: float = 0.0, max_tokens: int = default_max_tokens, **kwargs) -> list | dict:
-        content = self.create_text(messages, temperature, max_tokens, **kwargs)
+        content = self.create_text(messages, temperature=temperature, max_tokens=max_tokens, **kwargs)
         try:
             return self._as_json(content)
         except ValueError as e:
