@@ -1,5 +1,6 @@
 import requests
 from typing import List, Dict, Any, Optional
+from pydantic import BaseModel
 from dataclasses import dataclass
 import hashlib
 import json
@@ -10,12 +11,12 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-class Choice(BaseModel):
-    message: Message
-
 class Message(BaseModel):
     role: str
     content: str
+
+class Choice(BaseModel):
+    message: Message
 
 class Usage(BaseModel):
     prompt_tokens: int
@@ -24,7 +25,7 @@ class Usage(BaseModel):
 
 class Completion(BaseModel):
     choices: List[Choice]
-    usage: Usage
+    usage: Optional[Usage] = None
 
 class BaseLLMClient:
     default_max_tokens = 1536
@@ -122,6 +123,7 @@ class CachedLLMClient(BaseLLMClient):
             "choices": [
                 {
                     "message": {
+                        "role": choice.message.role,
                         "content": choice.message.content
                     }
                 }
@@ -140,12 +142,17 @@ class CachedLLMClient(BaseLLMClient):
         ).hexdigest()
         cache_path = os.path.join(self.cache_dir, f"{key}.json")
         if os.path.exists(cache_path):
-            with open(cache_path, 'rt') as f:
-                cache_data = json.load(f)
-                if cache_data['model'] == self.llm_client.model and json.dumps(cache_data['request']) == json.dumps(messages):
-                    return Completion(**cache_data['response'])
-                else:
-                    logger.debug(f"Cache mismatch for {key}")
+            try:
+                with open(cache_path, 'rt') as f:
+                    cache_data = json.load(f)
+                    if cache_data['model'] == self.llm_client.model and json.dumps(cache_data['request']) == json.dumps(messages):
+                        return Completion(**cache_data['response'])
+                    else:
+                        logger.debug(f"Cache mismatch for {key}")
+            except (json.JSONDecodeError, KeyError) as e:
+                logger.warning(f"Invalid cache file {cache_path}: {str(e)}")
+                # Continue to make API call if cache is invalid
+        
         completion = self.llm_client.create(messages, temperature, max_tokens, **kwargs)
         with open(cache_path, 'wt') as f:
             json.dump({'model': self.llm_client.model, 'request': messages, 'response': self._completion_to_dict(completion)}, f, indent=4)
