@@ -224,4 +224,4 @@ def test_cached_llm_client_invalid_cache_file(cached_llm_client, mock_aisuite_cl
     
     # Verify new API call was made
     mock_client.chat.completions.create.assert_called_once()
-    assert isinstance(completion, Completion) 
+    assert isinstance(completion, Completion)
