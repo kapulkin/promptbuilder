@@ -15,19 +15,17 @@ logger = logging.getLogger(__name__)
 class BaseLLMClientAsync:
     default_max_tokens = BaseLLMClient.default_max_tokens
 
-    async def from_text(self, prompt: str, temperature: float = 0.0, max_tokens: int = default_max_tokens, **kwargs) -> str:
+    async def from_text(self, prompt: str, **kwargs) -> str:
         return await self.create_text(
             messages=[{
                 'role': 'user',
                 'content': prompt
             }],
-            max_tokens=max_tokens,
-            temperature=temperature,
             **kwargs
         )
 
-    async def from_text_structured(self, prompt: str, temperature: float = 0.0, max_tokens: int = default_max_tokens, **kwargs) -> dict | list:
-        response = await self.from_text(prompt, temperature, max_tokens, **kwargs)
+    async def from_text_structured(self, prompt: str, **kwargs) -> dict | list:
+        response = await self.from_text(prompt, **kwargs)
         try:
             return self._as_json(response)
         except ValueError as e:
@@ -49,26 +47,24 @@ class BaseLLMClientAsync:
         except json.JSONDecodeError as e:
             raise ValueError(f"Failed to parse LLM response as JSON:\n{text}")
 
-    async def with_system_message(self, system_message: str, input: str, temperature: float = 0.0, max_tokens: int = default_max_tokens, **kwargs) -> str:
+    async def with_system_message(self, system_message: str, input: str, **kwargs) -> str:
         return await self.create_text(
             messages=[
                 {'role': 'system', 'content': system_message},
                 {'role': 'user', 'content': input}
             ],
-            max_tokens=max_tokens,
-            temperature=temperature,
             **kwargs
         )
 
-    async def create(self, messages: List[Dict[str, str]], temperature: float = 0.0, max_tokens: int = default_max_tokens, **kwargs) -> Completion:
+    async def create(self, messages: List[Dict[str, str]], **kwargs) -> Completion:
         raise NotImplementedError
 
-    async def create_text(self, messages: List[Dict[str, str]], temperature: float = 0.0, max_tokens: int = default_max_tokens, **kwargs) -> str:
-        completion = await self.create(messages, temperature=temperature, max_tokens=max_tokens, **kwargs)
+    async def create_text(self, messages: List[Dict[str, str]], **kwargs) -> str:
+        completion = await self.create(messages, **kwargs)
         return completion.choices[0].message.content
 
-    async def create_structured(self, messages: List[Dict[str, str]], temperature: float = 0.0, max_tokens: int = default_max_tokens, **kwargs) -> list | dict:
-        content = await self.create_text(messages, temperature=temperature, max_tokens=max_tokens, **kwargs)
+    async def create_structured(self, messages: List[Dict[str, str]], **kwargs) -> list | dict:
+        content = await self.create_text(messages, **kwargs)
         try:
             return self._as_json(content)
         except ValueError as e:

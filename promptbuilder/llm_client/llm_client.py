@@ -30,19 +30,17 @@ class Completion(BaseModel):
 class BaseLLMClient:
     default_max_tokens = 1536
 
-    def from_text(self, prompt: str, temperature: float = 0.0, max_tokens: int = default_max_tokens, **kwargs) -> str:
+    def from_text(self, prompt: str, **kwargs) -> str:
         return self.create_text(
             messages=[{
                 'role': 'user',
                 'content': prompt
             }],
-            max_tokens=max_tokens,
-            temperature=temperature,
             **kwargs
         )
 
-    def from_text_structured(self, prompt: str, temperature: float = 0.0, max_tokens: int = default_max_tokens, **kwargs) -> dict | list:
-        response = self.from_text(prompt, temperature, max_tokens, **kwargs)
+    def from_text_structured(self, prompt: str, **kwargs) -> dict | list:
+        response = self.from_text(prompt, **kwargs)
         try:
             return self._as_json(response)
         except ValueError as e:
@@ -64,26 +62,24 @@ class BaseLLMClient:
         except json.JSONDecodeError as e:
             raise ValueError(f"Failed to parse LLM response as JSON:\n{text}")
 
-    def with_system_message(self, system_message: str, input: str, temperature: float = 0.0, max_tokens: int = default_max_tokens, **kwargs) -> str:
+    def with_system_message(self, system_message: str, input: str, **kwargs) -> str:
         return self.create_text(
             messages=[
                 {'role': 'system', 'content': system_message},
                 {'role': 'user', 'content': input}
             ],
-            max_tokens=max_tokens,
-            temperature=temperature,
             **kwargs
         )
 
-    def create(self, messages: List[Dict[str, str]], temperature: float = 0.0, max_tokens: int = default_max_tokens, **kwargs) -> Completion:
+    def create(self, messages: List[Dict[str, str]], **kwargs) -> Completion:
         raise NotImplementedError
 
-    def create_text(self, messages: List[Dict[str, str]], temperature: float = 0.0, max_tokens: int = default_max_tokens, **kwargs) -> str:
-        completion = self.create(messages, temperature=temperature, max_tokens=max_tokens, **kwargs)
+    def create_text(self, messages: List[Dict[str, str]], **kwargs) -> str:
+        completion = self.create(messages, **kwargs)
         return completion.choices[0].message.content
 
-    def create_structured(self, messages: List[Dict[str, str]], temperature: float = 0.0, max_tokens: int = default_max_tokens, **kwargs) -> list | dict:
-        content = self.create_text(messages, temperature=temperature, max_tokens=max_tokens, **kwargs)
+    def create_structured(self, messages: List[Dict[str, str]], **kwargs) -> list | dict:
+        content = self.create_text(messages, **kwargs)
         try:
             return self._as_json(content)
         except ValueError as e:
@@ -102,12 +98,10 @@ class LLMClient(BaseLLMClient):
             provider_configs[provider]['timeout'] = timeout
         self.client = aisuite.Client(provider_configs=provider_configs)
     
-    def create(self, messages: List[Dict[str, str]], temperature: float = 0.0, max_tokens: int = BaseLLMClient.default_max_tokens, **kwargs) -> Completion:
+    def create(self, messages: List[Dict[str, str]], **kwargs) -> Completion:
         completion = self.client.chat.completions.create(
             model=self.model,
             messages=messages,
-            max_tokens=max_tokens,
-            temperature=temperature,
             **kwargs
         )
         return completion
@@ -136,7 +130,7 @@ class CachedLLMClient(BaseLLMClient):
             }
         }
 
-    def create(self, messages: List[Dict[str, str]], temperature: float = 0.0, max_tokens: int = BaseLLMClient.default_max_tokens, **kwargs) -> Completion:
+    def create(self, messages: List[Dict[str, str]], **kwargs) -> Completion:
         key = hashlib.sha256(
             json.dumps((self.llm_client.model, messages)).encode()
         ).hexdigest()
@@ -153,7 +147,7 @@ class CachedLLMClient(BaseLLMClient):
                 logger.warning(f"Invalid cache file {cache_path}: {str(e)}")
                 # Continue to make API call if cache is invalid
         
-        completion = self.llm_client.create(messages, temperature, max_tokens, **kwargs)
+        completion = self.llm_client.create(messages, **kwargs)
         with open(cache_path, 'wt') as f:
             json.dump({'model': self.llm_client.model, 'request': messages, 'response': self._completion_to_dict(completion)}, f, indent=4)
         return completion
