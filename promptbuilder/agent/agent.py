@@ -5,6 +5,7 @@ from promptbuilder.agent.tool import Tool
 from promptbuilder.agent.context import Context
 from promptbuilder.prompt_builder import PromptBuilder
 from pydantic import Field, create_model
+from promptbuilder.llm_client.messages import Content, Part
 import logging
 
 logger = logging.getLogger(__name__)
@@ -15,6 +16,8 @@ class Agent(Generic[ContextType]):
     def __init__(self, llm_client: BaseLLMClient, context: ContextType):
         self.llm_client = llm_client
         self.context = context
+        self.user_tag = "user"
+        self.assistant_tag = "assistant"
 
     async def __call__(self, user_message: Message, **kwargs: Any) -> str:
         raise NotImplementedError("Agent is not implemented")
@@ -24,7 +27,8 @@ class Agent(Generic[ContextType]):
 
     def _answer_with_llm(self):
         return self.llm_client.create(
-            messages=[msg.llm_dict() for msg in [self.system_message()] + self.context.history()]
+            messages=[Content(parts=[Part(text=msg.content)], role=msg.role) for msg in self.context.history()],
+            system_message=self.system_message()
         )
 
 class AgentRouter(Agent[ContextType]):
@@ -38,7 +42,8 @@ class AgentRouter(Agent[ContextType]):
 
         if len(self.tools) > 0:
             response = self.llm_client.create_structured(
-                messages=[msg.llm_dict() for msg in [self.system_message()] + self.context.history()]
+                messages=[Content(parts=[Part(text=msg.content)], role=msg.role) for msg in self.context.history()],
+                system_message=self.system_message()
             )
 
             tool_name = response["tool_name"]
@@ -54,7 +59,7 @@ class AgentRouter(Agent[ContextType]):
             response = self._answer_with_llm()
 
         if response is not None and type(response) is str:
-            self.context.messages.append(Message(role="assistant", content=response))
+            self.context.messages.append(Message(role=self.assistant_tag, content=response))
         
         logger.debug("Agent response: %s", response)
         return response
