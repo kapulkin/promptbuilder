@@ -1,35 +1,16 @@
-import requests
-from typing import List, Dict, Any, Optional
-from pydantic import BaseModel
-from dataclasses import dataclass
+from typing import Dict, Any, Optional
 import hashlib
 import json
 import re
 import os
 import aisuite
 import logging
+from promptbuilder.llm_client.messages import Completion, MessagesDict
 
 logger = logging.getLogger(__name__)
 
-class Message(BaseModel):
-    role: str
-    content: str
-
-class Choice(BaseModel):
-    message: Message
-
-class Usage(BaseModel):
-    prompt_tokens: int
-    completion_tokens: int
-    total_tokens: int
-
-class Completion(BaseModel):
-    choices: List[Choice]
-    usage: Optional[Usage] = None
 
 class BaseLLMClient:
-    default_max_tokens = 1536
-
     def from_text(self, prompt: str, **kwargs) -> str:
         return self.create_text(
             messages=[{
@@ -71,14 +52,14 @@ class BaseLLMClient:
             **kwargs
         )
 
-    def create(self, messages: List[Dict[str, str]], **kwargs) -> Completion:
+    def create(self, messages: MessagesDict, **kwargs) -> Completion:
         raise NotImplementedError
 
-    def create_text(self, messages: List[Dict[str, str]], **kwargs) -> str:
+    def create_text(self, messages: MessagesDict, **kwargs) -> str:
         completion = self.create(messages, **kwargs)
         return completion.choices[0].message.content
 
-    def create_structured(self, messages: List[Dict[str, str]], **kwargs) -> list | dict:
+    def create_structured(self, messages: MessagesDict, **kwargs) -> list | dict:
         content = self.create_text(messages, **kwargs)
         try:
             return self._as_json(content)
@@ -98,7 +79,7 @@ class LLMClient(BaseLLMClient):
             provider_configs[provider]['timeout'] = timeout
         self.client = aisuite.Client(provider_configs=provider_configs)
     
-    def create(self, messages: List[Dict[str, str]], **kwargs) -> Completion:
+    def create(self, messages: MessagesDict, **kwargs) -> Completion:
         completion = self.client.chat.completions.create(
             model=self.model,
             messages=messages,
@@ -130,7 +111,7 @@ class CachedLLMClient(BaseLLMClient):
             }
         }
 
-    def create(self, messages: List[Dict[str, str]], **kwargs) -> Completion:
+    def create(self, messages: MessagesDict, **kwargs) -> Completion:
         key = hashlib.sha256(
             json.dumps((self.llm_client.model, messages)).encode()
         ).hexdigest()

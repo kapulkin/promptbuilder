@@ -1,20 +1,15 @@
-import requests
-from typing import List, Dict, Any, Optional
-from pydantic import BaseModel
-from dataclasses import dataclass
+from typing import Dict, Any, Optional
 import hashlib
 import json
 import re
 import os
 import aisuite
 import logging
-from .llm_client import Completion, BaseLLMClient
+from promptbuilder.llm_client.messages import Completion, MessagesDict
 
 logger = logging.getLogger(__name__)
 
 class BaseLLMClientAsync:
-    default_max_tokens = BaseLLMClient.default_max_tokens
-
     async def from_text(self, prompt: str, **kwargs) -> str:
         return await self.create_text(
             messages=[{
@@ -56,14 +51,14 @@ class BaseLLMClientAsync:
             **kwargs
         )
 
-    async def create(self, messages: List[Dict[str, str]], **kwargs) -> Completion:
+    async def create(self, messages: MessagesDict, **kwargs) -> Completion:
         raise NotImplementedError
 
-    async def create_text(self, messages: List[Dict[str, str]], **kwargs) -> str:
+    async def create_text(self, messages: MessagesDict, **kwargs) -> str:
         completion = await self.create(messages, **kwargs)
         return completion.choices[0].message.content
 
-    async def create_structured(self, messages: List[Dict[str, str]], **kwargs) -> list | dict:
+    async def create_structured(self, messages: MessagesDict, **kwargs) -> list | dict:
         content = await self.create_text(messages, **kwargs)
         try:
             return self._as_json(content)
