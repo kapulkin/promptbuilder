@@ -1,19 +1,19 @@
-import requests
-from typing import List, Dict, Any, Optional
-from pydantic import BaseModel
-from dataclasses import dataclass
+from typing import Dict, Any, Optional, List
 import hashlib
 import json
 import re
 import os
 import aisuite
 import logging
-from .llm_client import Completion, BaseLLMClient
+from promptbuilder.llm_client.messages import Response, MessagesDict, Content
 
 logger = logging.getLogger(__name__)
 
 class BaseLLMClientAsync:
-    default_max_tokens = BaseLLMClient.default_max_tokens
+    @property
+    def model(self) -> str:
+        """Return the model identifier used by this LLM client."""
+        raise NotImplementedError    
 
     async def from_text(self, prompt: str, **kwargs) -> str:
         return await self.create_text(
@@ -50,22 +50,66 @@ class BaseLLMClientAsync:
     async def with_system_message(self, system_message: str, input: str, **kwargs) -> str:
         return await self.create_text(
             messages=[
-                {'role': 'system', 'content': system_message},
-                {'role': 'user', 'content': input}
+                Content(parts=[Part(text=input)], role='user'),
             ],
+            system_message=system_message,
             **kwargs
         )
 
-    async def create(self, messages: List[Dict[str, str]], **kwargs) -> Completion:
+    async def create(self, messages: List[Content], **kwargs) -> Response:
         raise NotImplementedError
 
-    async def create_text(self, messages: List[Dict[str, str]], **kwargs) -> str:
-        completion = await self.create(messages, **kwargs)
-        return completion.choices[0].message.content
+    async def create_text(self, messages: List[Content], **kwargs) -> str:
+        response = await self.create(messages, **kwargs)
+        return response.candidates[0].content.parts[0].text
 
-    async def create_structured(self, messages: List[Dict[str, str]], **kwargs) -> list | dict:
+    async def create_structured(self, messages: List[Content], **kwargs) -> list | dict:
         content = await self.create_text(messages, **kwargs)
         try:
             return self._as_json(content)
         except ValueError as e:
             raise ValueError(f"Failed to parse LLM response as JSON:\n{content}\nMessages:\n{messages}")
+
+class AiSuiteLLMClientAsync(BaseLLMClientAsync):
+    def __init__(self, model: str = None, api_key: str = None, timeout: int = 60):
+        if model is None:
+            model = os.getenv('DEFAULT_MODEL')
+        self._model = model
+        provider = model.split(':')[0]
+        provider_configs = { provider: {} }
+        if api_key is not None:
+            provider_configs[provider]['api_key'] = api_key
+        if timeout is not None:
+            provider_configs[provider]['timeout'] = timeout
+        self.client = aisuite.AsyncClient(provider_configs=provider_configs)
+    
+    @property
+    def model(self) -> str:
+        return self._model
+
+    async def create(self, messages: List[Content], **kwargs) -> Response:
+        messages = [{ 'role': message.role, 'content': message.parts[0].text } for message in messages]
+
+        system_message = kwargs.get('system_message', None)
+        if system_message is not None:
+            messages.insert(0, { 'role': 'system', 'content': system_message })
+            del kwargs['system_message']
+
+        completion = await self.client.chat.completions.create(
+            model=self.model,
+            messages=messages,
+            **kwargs
+        )
+        return Response(
+            candidates=[
+                Candidate(content=Content(parts=[Part(text=candidate.message.content)], role=candidate.message.role))
+                for candidate in completion.choices
+            ],
+            usage_metadata=UsageMetadata(
+                candidates_token_count=completion.usage.completion_tokens,
+                prompt_token_count=completion.usage.prompt_tokens,
+                total_token_count=completion.usage.total_tokens
+            ) if completion.usage is not None else None
+        )
+
+LLMClientAsync = AiSuiteLLMClientAsync
