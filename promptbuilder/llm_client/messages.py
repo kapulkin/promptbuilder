@@ -29,5 +29,12 @@ class Content(BaseModel):
 class Candidate(BaseModel):
     content: Content
 
-class Request(BaseModel):
+class UsageMetadata(BaseModel):
+    cached_content_token_count: Optional[int] = None
+    candidates_token_count: Optional[int] = None
+    prompt_token_count: Optional[int] = None
+    total_token_count: Optional[int] = None
+
+class Response(BaseModel):
     candidates: List[Candidate]
+    usage_metadata: Optional[UsageMetadata] = None

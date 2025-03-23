@@ -1,6 +1,7 @@
 import pytest
 from unittest.mock import Mock, patch
-from promptbuilder.llm_client import LLMClient, CachedLLMClient, Completion, Choice, Message, Usage
+from promptbuilder.llm_client import LLMClient, CachedLLMClient
+from promptbuilder.llm_client.messages import Completion, Choice, Message, Usage, Response, Candidate, Content, Part, UsageMetadata
 import json
 import os
 import tempfile
@@ -35,19 +36,19 @@ def llm_client(mock_aisuite_client):
     return LLMClient(model="test:model", api_key="test-key")
 
 def test_create_output_format(llm_client):
-    messages = [{"role": "user", "content": "Test message"}]
-    completion = llm_client.create(messages)
+    messages = [Content(parts=[Part(text="Test message")], role="user")]
+    response = llm_client.create(messages)
     
-    assert isinstance(completion, Completion)
-    assert len(completion.choices) == 1
-    assert completion.choices[0].message.content == "This is a test response"
-    assert completion.choices[0].message.role == "assistant"
-    assert completion.usage.prompt_tokens == 10
-    assert completion.usage.completion_tokens == 20
-    assert completion.usage.total_tokens == 30
+    assert isinstance(response, Response)
+    assert len(response.candidates) == 1
+    assert response.candidates[0].content.parts[0].text == "This is a test response"
+    assert response.candidates[0].content.role == "assistant"
+    assert response.usage_metadata.prompt_token_count == 10
+    assert response.usage_metadata.candidates_token_count == 20
+    assert response.usage_metadata.total_token_count == 30
 
 def test_create_text_output_format(llm_client):
-    messages = [{"role": "user", "content": "Test message"}]
+    messages = [Content(parts=[Part(text="Test message")], role="user")]
     response = llm_client.create_text(messages)
     
     assert isinstance(response, str)
@@ -81,7 +82,7 @@ def llm_client_json(mock_aisuite_client_json):
     return LLMClient(model="test:model", api_key="test-key")
 
 def test_create_structured_output_format(llm_client_json):
-    messages = [{"role": "user", "content": "Test message"}]
+    messages = [Content(parts=[Part(text="Test message")], role="user")]
     response = llm_client_json.create_structured(messages)
     
     assert isinstance(response, dict)
@@ -105,7 +106,7 @@ def test_create_structured_with_markdown(llm_client_json):
             )
         )
         
-        messages = [{"role": "user", "content": "Test message"}]
+        messages = [Content(parts=[Part(text="Test message")], role="user")]
         response = llm_client_json.create_structured(messages)
         
         assert isinstance(response, dict)
@@ -129,7 +130,7 @@ def test_create_invalid_json_raises_error(llm_client):
             )
         )
         
-        messages = [{"role": "user", "content": "Test message"}]
+        messages = [Content(parts=[Part(text="Test message")], role="user")]
         with pytest.raises(ValueError):
             llm_client.create_structured(messages)
 
@@ -147,15 +148,15 @@ def cached_llm_client(llm_client, temp_cache_dir):
 
 def test_cached_llm_client_first_call(cached_llm_client, mock_aisuite_client):
     """Test that first call to create() makes an actual API call and caches result"""
-    messages = [{"role": "user", "content": "Test message"}]
+    messages = [Content(parts=[Part(text="Test message")], role="user")]
     
     # First call should make an API request
-    completion = cached_llm_client.create(messages)
+    response = cached_llm_client.create(messages)
     
     # Verify the completion
-    assert isinstance(completion, Completion)
-    assert len(completion.choices) == 1
-    assert completion.choices[0].message.content == "This is a test response"
+    assert isinstance(response, Response)
+    assert len(response.candidates) == 1
+    assert response.candidates[0].content.parts[0].text == "This is a test response"
     
     # Verify that the mock was called once
     mock_client = mock_aisuite_client.return_value
@@ -168,29 +169,29 @@ def test_cached_llm_client_first_call(cached_llm_client, mock_aisuite_client):
 
 def test_cached_llm_client_cache_hit(cached_llm_client, mock_aisuite_client):
     """Test that second call with same input uses cache"""
-    messages = [{"role": "user", "content": "Test message"}]
+    messages = [Content(parts=[Part(text="Test message")], role="user")]
     
     # First call to create cache
-    first_completion = cached_llm_client.create(messages)
+    first_response = cached_llm_client.create(messages)
     
     # Reset mock to verify it's not called again
     mock_client = mock_aisuite_client.return_value
     mock_client.chat.completions.create.reset_mock()
     
     # Second call should use cache
-    second_completion = cached_llm_client.create(messages)
+    second_response = cached_llm_client.create(messages)
     
     # Verify completions are identical
-    assert first_completion.choices[0].message.content == second_completion.choices[0].message.content
-    assert first_completion.usage.total_tokens == second_completion.usage.total_tokens
+    assert first_response.candidates[0].content.parts[0].text == second_response.candidates[0].content.parts[0].text
+    assert first_response.usage_metadata.total_token_count == second_response.usage_metadata.total_token_count
     
     # Verify no new API call was made
     mock_client.chat.completions.create.assert_not_called()
 
 def test_cached_llm_client_different_messages(cached_llm_client, mock_aisuite_client):
     """Test that different messages create new cache entries"""
-    first_messages = [{"role": "user", "content": "First message"}]
-    second_messages = [{"role": "user", "content": "Second message"}]
+    first_messages = [Content(parts=[Part(text="First message")], role="user")]
+    second_messages = [Content(parts=[Part(text="Second message")], role="user")]
     
     # First call
     cached_llm_client.create(first_messages)
@@ -204,7 +205,7 @@ def test_cached_llm_client_different_messages(cached_llm_client, mock_aisuite_cl
 
 def test_cached_llm_client_invalid_cache_file(cached_llm_client, mock_aisuite_client):
     """Test handling of corrupted cache file"""
-    messages = [{"role": "user", "content": "Test message"}]
+    messages = [Content(parts=[Part(text="Test message")], role="user")]
     
     # First call to create cache file
     cached_llm_client.create(messages)
@@ -220,8 +221,8 @@ def test_cached_llm_client_invalid_cache_file(cached_llm_client, mock_aisuite_cl
     mock_client.chat.completions.create.reset_mock()
     
     # Next call should make new API request
-    completion = cached_llm_client.create(messages)
+    response = cached_llm_client.create(messages)
     
     # Verify new API call was made
     mock_client.chat.completions.create.assert_called_once()
-    assert isinstance(completion, Completion)
+    assert isinstance(response, Response)
