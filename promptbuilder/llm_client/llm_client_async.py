@@ -114,7 +114,7 @@ class AiSuiteLLMClientAsync(BaseLLMClientAsync):
                 candidates_token_count=completion.usage.completion_tokens,
                 prompt_token_count=completion.usage.prompt_tokens,
                 total_token_count=completion.usage.total_tokens
-            ) if completion.usage is not None else None
+            ) if hasattr(completion, 'usage') and completion.usage is not None else None
         )
 
 LLMClientAsync = AiSuiteLLMClientAsync
