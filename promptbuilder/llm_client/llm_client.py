@@ -103,8 +103,13 @@ class AiSuiteLLMClient(BaseLLMClient):
         )
         return Response(
             candidates=[
-                Candidate(content=Content(parts=[Part(text=candidate.message.content)], role=candidate.message.role))
-                for candidate in completion.choices
+                Candidate(
+                    content=Content(
+                        parts=[Part(text=choice.message.content)],
+                        role=choice.message.role if hasattr(choice.message, 'role') else None
+                    )
+                )
+                for choice in completion.choices
             ],
             usage_metadata=UsageMetadata(
                 candidates_token_count=completion.usage.completion_tokens,
