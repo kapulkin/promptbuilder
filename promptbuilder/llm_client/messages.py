@@ -20,14 +20,14 @@ class Completion(BaseModel):
     usage: Optional[Usage] = None
 
 class Part(BaseModel):
-    text: str
+    text: Optional[str] = None
 
 class Content(BaseModel):
-    parts: List[Part]
-    role: str
+    parts: Optional[List[Part]] = None
+    role: Optional[str] = None
 
 class Candidate(BaseModel):
-    content: Content
+    content: Optional[Content] = None
 
 class UsageMetadata(BaseModel):
     cached_content_token_count: Optional[int] = None
@@ -36,5 +36,5 @@ class UsageMetadata(BaseModel):
     total_token_count: Optional[int] = None
 
 class Response(BaseModel):
-    candidates: List[Candidate]
+    candidates: Optional[List[Candidate]] = None
     usage_metadata: Optional[UsageMetadata] = None
