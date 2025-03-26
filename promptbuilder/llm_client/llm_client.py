@@ -1,4 +1,4 @@
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any, Optional, List, Iterator
 import hashlib
 import json
 import re
@@ -70,6 +70,9 @@ class BaseLLMClient:
             return self._as_json(content)
         except ValueError as e:
             raise ValueError(f"Failed to parse LLM response as JSON:\n{content}\nMessages:\n{messages}")
+
+    def create_stream(self, messages: List[Content], **kwargs) -> Iterator[Response]:
+        raise NotImplementedError
 
 class AiSuiteLLMClient(BaseLLMClient):
     def __init__(self, model: str = None, api_key: str = None, timeout: int = 60):
