@@ -3,9 +3,9 @@ import hashlib
 import json
 import re
 import os
-import aisuite
+import aisuite_async
 import logging
-from promptbuilder.llm_client.messages import Response, MessagesDict, Content
+from promptbuilder.llm_client.messages import Response, MessagesDict, Content, Candidate, UsageMetadata, Part
 
 logger = logging.getLogger(__name__)
 
@@ -17,10 +17,7 @@ class BaseLLMClientAsync:
 
     async def from_text(self, prompt: str, **kwargs) -> str:
         return await self.create_text(
-            messages=[{
-                'role': 'user',
-                'content': prompt
-            }],
+            messages=[Content(parts=[Part(text=prompt)], role='user')],
             **kwargs
         )
 
@@ -84,7 +81,7 @@ class AiSuiteLLMClientAsync(BaseLLMClientAsync):
             provider_configs[provider]['api_key'] = api_key
         if timeout is not None:
             provider_configs[provider]['timeout'] = timeout
-        self.client = aisuite.AsyncClient(provider_configs=provider_configs)
+        self.client = aisuite_async.AsyncClient(provider_configs=provider_configs)
     
     @property
     def model(self) -> str:

@@ -18,10 +18,7 @@ class BaseLLMClient:
 
     def from_text(self, prompt: str, **kwargs) -> str:
         return self.create_text(
-            messages=[{
-                'role': 'user',
-                'content': prompt
-            }],
+            messages=[Content(parts=[Part(text=prompt)], role='user')],
             **kwargs
         )
 
