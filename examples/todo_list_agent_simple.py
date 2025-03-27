@@ -2,17 +2,10 @@ from typing import List
 from pydantic import BaseModel, Field
 from promptbuilder.agent.agent import AgentRouter
 from promptbuilder.agent.context import Context
-from promptbuilder.agent.message import Message
+from promptbuilder.llm_client.messages import Content
 from promptbuilder.llm_client import LLMClient
 import os
 import dotenv
-
-# Define data models for our tools
-class AddTodoArgs(BaseModel):
-    item: TodoItem = Field(..., description="Todo item to add")
-
-class DeleteTodoArgs(BaseModel):
-    index: int = Field(..., description="Index of the todo item to delete (starting from 1)")
 
 # Custom context to store todo items
 class TodoItem(BaseModel):
@@ -48,25 +41,28 @@ Please help users manage their todo list by using the appropriate tools."""
 dotenv.load_dotenv()
 agent = TodoListAgent(llm_client=LLMClient(), context=TodoListContext())
 
-@agent.tool(description="Add a new todo item to the list", args_model=AddTodoArgs)
-async def add_todo(message: Message, args: AddTodoArgs, context: TodoListContext) -> str:
-    context.todos.append(args.item)
-    quantity_str = f" (x{args.item.quantity})" if args.item.quantity > 1 else ""
-    return f"Added todo item: {args.item.description}{quantity_str}\n\nCurrent todo list:\n{agent._formatted_list}"
+@agent.tool({"item": "Todo item to add"})
+async def add_todo(item: TodoItem) -> str:
+    """"Add a new todo item to the list"""
+    agent.context.todos.append(item)
+    quantity_str = f" (x{item.quantity})" if item.quantity > 1 else ""
+    return f"Added todo item: {item.description}{quantity_str}\n\nCurrent todo list:\n{agent._formatted_list}"
 
-@agent.tool(description="Show all todo items in the list")
-async def show_todos(message: Message, args: None, context: TodoListContext) -> str:
+@agent.tool()
+async def show_todos() -> str:
+    """Show all todo items in the list"""
     return f"Current todo list:\n{agent._formatted_list}"
 
-@agent.tool(description="Delete a todo item by its index", args_model=DeleteTodoArgs)
-async def delete_todo(message: Message, args: DeleteTodoArgs, context: TodoListContext) -> str:
-    if not context.todos:
+@agent.tool({"index": "Index of the todo item to delete (starting from 1)"})
+async def delete_todo(index: int) -> str:
+    """Delete a todo item by its index"""
+    if not agent.context.todos:
         return "Todo list is already empty"
     
-    if args.index < 1 or args.index > len(context.todos):
-        return f"Invalid index. Please provide a number between 1 and {len(context.todos)}"
+    if index < 1 or index > len(agent.context.todos):
+        return f"Invalid index. Please provide a number between 1 and {len(agent.context.todos)}"
     
-    deleted_item = context.todos.pop(args.index - 1)
+    deleted_item = agent.context.todos.pop(index - 1)
     return f"Deleted todo item: {deleted_item.description}\n\nCurrent todo list:\n{agent._formatted_list}"
 
 async def main():    
@@ -82,7 +78,7 @@ async def main():
     
     for msg in messages:
         print(f"\nUser: {msg}")
-        response = await agent(Message(role="user", content=msg))
+        response = await agent(msg)
         print(f"Assistant: {response}")
 
 if __name__ == "__main__":

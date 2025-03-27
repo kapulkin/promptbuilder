@@ -5,7 +5,8 @@ import re
 import os
 import aisuite_async
 import logging
-from promptbuilder.llm_client.messages import Response, MessagesDict, Content, Candidate, UsageMetadata, Part
+from promptbuilder.llm_client.messages import Response, Content, Candidate, UsageMetadata, Part
+from promptbuilder.llm_client.llm_client import AiSuiteLLMClient
 
 logger = logging.getLogger(__name__)
 
@@ -53,7 +54,7 @@ class BaseLLMClientAsync:
             **kwargs
         )
 
-    async def create(self, messages: List[Content], **kwargs) -> Response:
+    async def create(self, messages: List[Content], system_message: str = None, **kwargs) -> Response:
         raise NotImplementedError
 
     async def create_text(self, messages: List[Content], **kwargs) -> str:
@@ -87,24 +88,28 @@ class AiSuiteLLMClientAsync(BaseLLMClientAsync):
     def model(self) -> str:
         return self._model
 
-    async def create(self, messages: List[Content], **kwargs) -> Response:
+    async def create(self, messages: List[Content], system_message: str = None, **kwargs) -> Response:
         messages = [{ 'role': message.role, 'content': message.parts[0].text } for message in messages]
 
-        system_message = kwargs.get('system_message', None)
         if system_message is not None:
             messages.insert(0, { 'role': 'system', 'content': system_message })
-            del kwargs['system_message']
 
         completion = await self.client.chat.completions.create(
             model=self.model,
             messages=messages,
             **kwargs
         )
+
+        tool_calls = getattr(completion.choices[0].message, "tool_calls", None)
+        if not isinstance(tool_calls, list):
+            tool_calls = [tool_calls]
+        tool_call = tool_calls[0] if tool_calls else None
+
         return Response(
             candidates=[
                 Candidate(
                     content=Content(
-                        parts=[Part(text=choice.message.content)],
+                        parts=[Part(text=choice.message.content, function_call=AiSuiteLLMClient.make_function_call(tool_call) if tool_call else None)],
                         role=choice.message.role if hasattr(choice.message, 'role') else None
                     )
                 )

@@ -5,10 +5,9 @@ import re
 import os
 import aisuite
 import logging
-from promptbuilder.llm_client.messages import Completion, Response, Content, Part, UsageMetadata, Candidate
+from promptbuilder.llm_client.messages import Completion, Response, Content, Part, UsageMetadata, Candidate, FunctionCall
 
 logger = logging.getLogger(__name__)
-
 
 class BaseLLMClient:
     @property
@@ -54,7 +53,7 @@ class BaseLLMClient:
             **kwargs
         )
 
-    def create(self, messages: List[Content], **kwargs) -> Response:
+    def create(self, messages: List[Content], system_message: str = None, **kwargs) -> Response:
         raise NotImplementedError
 
     def create_text(self, messages: List[Content], **kwargs) -> str:
@@ -88,24 +87,45 @@ class AiSuiteLLMClient(BaseLLMClient):
     def model(self) -> str:
         return self._model
 
-    def create(self, messages: List[Content], **kwargs) -> Response:
+    @staticmethod
+    def make_function_call(tool_call) -> FunctionCall | None:
+        if isinstance(tool_call, dict):
+            tool_name = tool_call["function"]["name"]
+            arguments = tool_call["function"]["arguments"]
+            tool_call_id = tool_call["id"]
+        else:
+            tool_name = tool_call.function.name
+            arguments = tool_call.function.arguments
+            tool_call_id = tool_call.id
+
+        # Ensure arguments is a dict
+        if isinstance(arguments, str):
+            arguments = json.loads(arguments)
+
+        return FunctionCall(id=tool_call_id, name=tool_name, args=arguments)
+
+    def create(self, messages: List[Content], system_message: str = None, **kwargs) -> Response:
         messages = [{ 'role': message.role, 'content': message.parts[0].text } for message in messages]
 
-        system_message = kwargs.get('system_message', None)
         if system_message is not None:
             messages.insert(0, { 'role': 'system', 'content': system_message })
-            del kwargs['system_message']
 
         completion = self.client.chat.completions.create(
             model=self.model,
             messages=messages,
             **kwargs
         )
+
+        tool_calls = getattr(completion.choices[0].message, "tool_calls", None)
+        if not isinstance(tool_calls, list):
+            tool_calls = [tool_calls]
+        tool_call = tool_calls[0] if tool_calls else None
+
         return Response(
             candidates=[
                 Candidate(
                     content=Content(
-                        parts=[Part(text=choice.message.content)],
+                        parts=[Part(text=choice.message.content, function_call=AiSuiteLLMClient.make_function_call(tool_call) if tool_call else None)],
                         role=choice.message.role if hasattr(choice.message, 'role') else None
                     )
                 )

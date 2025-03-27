@@ -1,16 +1,15 @@
 from pydantic import BaseModel
-from promptbuilder.agent.message import Message
+from promptbuilder.llm_client.messages import Content
 
 class Context(BaseModel):
-    messages: list[Message] = []
+    messages: list[Content] = []
+    history_length: int = 0
 
-    def history(self, length: int = 20) -> list[Message]:
-        return self.messages[-length:]
+    def history(self) -> list[Content]:
+        return self.messages[-self.history_length:]
 
-    def add_message(self, message: Message):
+    def add_message(self, message: Content):
         self.messages.append(message)
 
     def clear(self):
         self.messages = []
-
-
