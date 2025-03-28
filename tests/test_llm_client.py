@@ -9,7 +9,7 @@ import shutil
 
 @pytest.fixture
 def mock_aisuite_client():
-    with patch('aisuite.Client') as mock_client:
+    with patch('aisuite_async.Client') as mock_client:
         # Create a mock completion response
         mock_completion = Completion(
             choices=[
@@ -56,7 +56,7 @@ def test_create_text_output_format(llm_client):
 
 @pytest.fixture
 def mock_aisuite_client_json():
-    with patch('aisuite.Client') as mock_client:
+    with patch('aisuite_async.Client') as mock_client:
         # Create a mock completion with JSON response
         mock_completion = Completion(
             choices=[

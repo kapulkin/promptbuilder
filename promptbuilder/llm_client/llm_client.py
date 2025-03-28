@@ -3,7 +3,7 @@ import hashlib
 import json
 import re
 import os
-import aisuite
+import aisuite_async
 import logging
 from promptbuilder.llm_client.messages import Completion, Response, Content, Part, UsageMetadata, Candidate, FunctionCall
 
@@ -84,7 +84,7 @@ class AiSuiteLLMClient(BaseLLMClient):
             provider_configs[provider]['api_key'] = api_key
         if timeout is not None:
             provider_configs[provider]['timeout'] = timeout
-        self.client = aisuite.Client(provider_configs=provider_configs)
+        self.client = aisuite_async.Client(provider_configs=provider_configs)
     
     @property
     def model(self) -> str:
