@@ -1,7 +1,7 @@
 from typing import List
 from pydantic import BaseModel, Field
 from promptbuilder.agent.agent import AgentRouter
-from promptbuilder.agent.context import Context
+from promptbuilder.agent.context import Context, InMemoryDialogHistory
 from promptbuilder.llm_client.messages import Content
 from promptbuilder.llm_client import LLMClient
 import os
@@ -15,9 +15,16 @@ class TodoItem(BaseModel):
 class TodoListContext(Context):
     todos: List[TodoItem] = []
 
+    def __init__(self):
+        super().__init__(dialog_history=InMemoryDialogHistory())
+
 class TodoListAgent(AgentRouter[TodoListContext]):
     def __init__(self, llm_client: LLMClient, context: TodoListContext):
-        super().__init__(llm_client=llm_client, context=context)        
+        super().__init__(llm_client=llm_client, context=context)
+
+        self.add_todo_agent = AddTodoAgent()
+
+        self.add_route(self.add_todo_agent)
 
     def description(self) -> str:
         return """You are a helpful TODO list manager. You can:

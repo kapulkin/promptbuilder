@@ -10,6 +10,9 @@ from promptbuilder.llm_client.messages import Completion, Response, Content, Par
 logger = logging.getLogger(__name__)
 
 class BaseLLMClient:
+    user_tag: str = 'user'
+    assistant_tag: str = 'model'
+
     @property
     def model(self) -> str:
         """Return the model identifier used by this LLM client."""
@@ -17,7 +20,7 @@ class BaseLLMClient:
 
     def from_text(self, prompt: str, **kwargs) -> str:
         return self.create_text(
-            messages=[Content(parts=[Part(text=prompt)], role='user')],
+            messages=[Content(parts=[Part(text=prompt)], role=BaseLLMClient.user_tag)],
             **kwargs
         )
 
@@ -47,7 +50,7 @@ class BaseLLMClient:
     def with_system_message(self, system_message: str, input: str, **kwargs) -> str:
         return self.create_text(
             messages=[
-                Content(parts=[Part(text=input)], role='user')
+                Content(parts=[Part(text=input)], role=BaseLLMClient.user_tag)
             ],
             system_message = system_message,
             **kwargs
@@ -87,6 +90,12 @@ class AiSuiteLLMClient(BaseLLMClient):
     def model(self) -> str:
         return self._model
 
+    def _internal_role(self, role: str) -> str:
+        return "user" if role == self.user_tag else "assistant"
+
+    def _external_role(self, role: str) -> str:
+        return self.user_tag if role == "user" else self.assistant_tag
+
     @staticmethod
     def make_function_call(tool_call) -> FunctionCall | None:
         if isinstance(tool_call, dict):
@@ -105,7 +114,7 @@ class AiSuiteLLMClient(BaseLLMClient):
         return FunctionCall(id=tool_call_id, name=tool_name, args=arguments)
 
     def create(self, messages: List[Content], system_message: str = None, **kwargs) -> Response:
-        messages = [{ 'role': message.role, 'content': message.parts[0].text } for message in messages]
+        messages = [{ 'role': self._internal_role(message.role), 'content': message.parts[0].text } for message in messages]
 
         if system_message is not None:
             messages.insert(0, { 'role': 'system', 'content': system_message })
@@ -126,7 +135,7 @@ class AiSuiteLLMClient(BaseLLMClient):
                 Candidate(
                     content=Content(
                         parts=[Part(text=choice.message.content, function_call=AiSuiteLLMClient.make_function_call(tool_call) if tool_call else None)],
-                        role=choice.message.role if hasattr(choice.message, 'role') else None
+                        role=self._external_role(choice.message.role) if hasattr(choice.message, 'role') else None
                     )
                 )
                 for choice in completion.choices

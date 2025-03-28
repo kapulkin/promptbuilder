@@ -16,10 +16,8 @@ class Agent(Generic[ContextType]):
     def __init__(self, llm_client: BaseLLMClient | BaseLLMClientAsync, context: ContextType):
         self.llm_client = llm_client
         self.context = context
-        self.user_tag = "user"
-        self.assistant_tag = "model" if isinstance(llm_client, GoogleLLMClient) or isinstance(llm_client, GoogleLLMClientAsync) else "assistant"
 
-    async def __call__(self, user_message: str, **kwargs: Any) -> str:
+    async def __call__(self, **kwargs: Any) -> str:
         raise NotImplementedError("Agent is not implemented")
 
     def system_message(self, **kwargs: Any) -> str:
@@ -27,7 +25,7 @@ class Agent(Generic[ContextType]):
 
     async def _answer_with_llm(self, **kwargs: Any):
         return await run_async(self.llm_client.create,
-            messages=[Content(parts=[Part(text=msg.content)], role=msg.role) for msg in self.context.history()],
+            messages=[Content(parts=[Part(text=msg.content)], role=msg.role) for msg in self.context.dialog_history.last_messages()],
             system_message=self.system_message(**kwargs),
             **kwargs
         )
@@ -42,13 +40,13 @@ class AgentRouter(Agent[ContextType]):
     
     async def __call__(self, user_message: str, tools_to_exclude: set[str] = set(), **kwargs: Any) -> str:
         if len(tools_to_exclude) > 0:
-            self.context.add_message(Content(parts=[Part(text=user_message)], role=self.user_tag))
+            self.context.dialog_history.add_message(Content(parts=[Part(text=user_message)], role=BaseLLMClient.user_tag))
 
         callable_tools = [callable_tool for callable_tool in self.callable_tools.values() if callable_tool.name not in tools_to_exclude]
         tools = [callable_tool.tool for callable_tool in callable_tools]
 
         response = await self.llm_client.create(
-            messages=[Content(parts=[Part(text=msg.content)], role=msg.role) for msg in self.context.history()],
+            messages=[Content(parts=[Part(text=msg.content)], role=msg.role) for msg in self.context.dialog_history.last_messages()],
             system_message=self.system_message(callable_tools=callable_tools),
             tools=tools
         )
@@ -73,16 +71,16 @@ class AgentRouter(Agent[ContextType]):
             callable_tool = self.callable_tools.get(tool_name)
             if callable_tool is not None:
                 self.last_used_tool_name = tool_name
-                self.context.add_message(content)
+                self.context.dialog_history.add_message(content)
                 logger.debug("Tool %s called with args: %s", tool_name, args)
                 tool_response = await callable_tool(**args)
                 logger.debug("Tool %s response: %s", tool_name, tool_response)
-                self.context.add_message(tool_response.candidates[0].content)
+                self.context.dialog_history.add_message(tool_response.candidates[0].content)
                 tools_to_exclude = tools_to_exclude | {tool_name}
                 return await self(user_message, tools_to_exclude=tools_to_exclude, **kwargs)
             
             raise ValueError(f"Tool {tool_name} not found")
-        self.context.add_message(content)
+        self.context.dialog_history.add_message(content)
     
     def description(self) -> str:
         raise NotImplementedError("Description is not implemented")

@@ -1,6 +1,6 @@
 import pytest
 from unittest.mock import Mock, patch, AsyncMock
-from promptbuilder.llm_client import LLMClientAsync
+from promptbuilder.llm_client import LLMClientAsync, BaseLLMClient
 from promptbuilder.llm_client.messages import Completion, Choice, Message, Usage, Response, Candidate, Content, Part, UsageMetadata
 import json
 import os
@@ -38,20 +38,20 @@ def llm_client(mock_aisuite_client):
 
 @pytest.mark.asyncio
 async def test_create_output_format(llm_client):
-    messages = [Content(parts=[Part(text="Test message")], role="user")]
+    messages = [Content(parts=[Part(text="Test message")], role=BaseLLMClient.user_tag)]
     response = await llm_client.create(messages)
     
     assert isinstance(response, Response)
     assert len(response.candidates) == 1
     assert response.candidates[0].content.parts[0].text == "This is a test response"
-    assert response.candidates[0].content.role == "assistant"
+    assert response.candidates[0].content.role == BaseLLMClient.assistant_tag
     assert response.usage_metadata.prompt_token_count == 10
     assert response.usage_metadata.candidates_token_count == 20
     assert response.usage_metadata.total_token_count == 30
 
 @pytest.mark.asyncio
 async def test_create_text_output_format(llm_client):
-    messages = [Content(parts=[Part(text="Test message")], role="user")]
+    messages = [Content(parts=[Part(text="Test message")], role=BaseLLMClient.user_tag)]
     response = await llm_client.create_text(messages)
     
     assert isinstance(response, str)
@@ -86,7 +86,7 @@ def llm_client_json(mock_aisuite_client_json):
 
 @pytest.mark.asyncio
 async def test_create_structured_output_format(llm_client_json):
-    messages = [Content(parts=[Part(text="Test message")], role="user")]
+    messages = [Content(parts=[Part(text="Test message")], role=BaseLLMClient.user_tag)]
     response = await llm_client_json.create_structured(messages)
     
     assert isinstance(response, dict)
@@ -111,7 +111,7 @@ async def test_create_structured_with_markdown(llm_client_json):
             )
         )
         
-        messages = [Content(parts=[Part(text="Test message")], role="user")]
+        messages = [Content(parts=[Part(text="Test message")], role=BaseLLMClient.user_tag)]
         response = await llm_client_json.create_structured(messages)
         
         assert isinstance(response, dict)
@@ -136,7 +136,7 @@ async def test_create_invalid_json_raises_error(llm_client):
             )
         )
         
-        messages = [Content(parts=[Part(text="Test message")], role="user")]
+        messages = [Content(parts=[Part(text="Test message")], role=BaseLLMClient.user_tag)]
         with pytest.raises(ValueError):
             await llm_client.create_structured(messages)
 
@@ -163,7 +163,7 @@ async def test_with_system_message(llm_client):
 
 @pytest.mark.asyncio
 async def test_create_with_system_message(llm_client):
-    messages = [Content(parts=[Part(text="Test message")], role="user")]
+    messages = [Content(parts=[Part(text="Test message")], role=BaseLLMClient.user_tag)]
     response = await llm_client.create(
         messages,
         system_message="You are a helpful assistant"

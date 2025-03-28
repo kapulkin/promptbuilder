@@ -1,6 +1,6 @@
 import pytest
 from unittest.mock import Mock, patch
-from promptbuilder.llm_client import LLMClient, CachedLLMClient
+from promptbuilder.llm_client import LLMClient, CachedLLMClient, BaseLLMClient
 from promptbuilder.llm_client.messages import Completion, Choice, Message, Usage, Response, Candidate, Content, Part, UsageMetadata
 import json
 import os
@@ -36,19 +36,19 @@ def llm_client(mock_aisuite_client):
     return LLMClient(model="test:model", api_key="test-key")
 
 def test_create_output_format(llm_client):
-    messages = [Content(parts=[Part(text="Test message")], role="user")]
+    messages = [Content(parts=[Part(text="Test message")], role=BaseLLMClient.user_tag)]
     response = llm_client.create(messages)
     
     assert isinstance(response, Response)
     assert len(response.candidates) == 1
     assert response.candidates[0].content.parts[0].text == "This is a test response"
-    assert response.candidates[0].content.role == "assistant"
+    assert response.candidates[0].content.role == BaseLLMClient.assistant_tag
     assert response.usage_metadata.prompt_token_count == 10
     assert response.usage_metadata.candidates_token_count == 20
     assert response.usage_metadata.total_token_count == 30
 
 def test_create_text_output_format(llm_client):
-    messages = [Content(parts=[Part(text="Test message")], role="user")]
+    messages = [Content(parts=[Part(text="Test message")], role=BaseLLMClient.user_tag)]
     response = llm_client.create_text(messages)
     
     assert isinstance(response, str)
@@ -82,7 +82,7 @@ def llm_client_json(mock_aisuite_client_json):
     return LLMClient(model="test:model", api_key="test-key")
 
 def test_create_structured_output_format(llm_client_json):
-    messages = [Content(parts=[Part(text="Test message")], role="user")]
+    messages = [Content(parts=[Part(text="Test message")], role=BaseLLMClient.user_tag)]
     response = llm_client_json.create_structured(messages)
     
     assert isinstance(response, dict)
@@ -106,7 +106,7 @@ def test_create_structured_with_markdown(llm_client_json):
             )
         )
         
-        messages = [Content(parts=[Part(text="Test message")], role="user")]
+        messages = [Content(parts=[Part(text="Test message")], role=BaseLLMClient.user_tag)]
         response = llm_client_json.create_structured(messages)
         
         assert isinstance(response, dict)
@@ -130,7 +130,7 @@ def test_create_invalid_json_raises_error(llm_client):
             )
         )
         
-        messages = [Content(parts=[Part(text="Test message")], role="user")]
+        messages = [Content(parts=[Part(text="Test message")], role=BaseLLMClient.user_tag)]
         with pytest.raises(ValueError):
             llm_client.create_structured(messages)
 
@@ -148,7 +148,7 @@ def cached_llm_client(llm_client, temp_cache_dir):
 
 def test_cached_llm_client_first_call(cached_llm_client, mock_aisuite_client):
     """Test that first call to create() makes an actual API call and caches result"""
-    messages = [Content(parts=[Part(text="Test message")], role="user")]
+    messages = [Content(parts=[Part(text="Test message")], role=BaseLLMClient.user_tag)]
     
     # First call should make an API request
     response = cached_llm_client.create(messages)
@@ -169,7 +169,7 @@ def test_cached_llm_client_first_call(cached_llm_client, mock_aisuite_client):
 
 def test_cached_llm_client_cache_hit(cached_llm_client, mock_aisuite_client):
     """Test that second call with same input uses cache"""
-    messages = [Content(parts=[Part(text="Test message")], role="user")]
+    messages = [Content(parts=[Part(text="Test message")], role=BaseLLMClient.user_tag)]
     
     # First call to create cache
     first_response = cached_llm_client.create(messages)
@@ -190,8 +190,8 @@ def test_cached_llm_client_cache_hit(cached_llm_client, mock_aisuite_client):
 
 def test_cached_llm_client_different_messages(cached_llm_client, mock_aisuite_client):
     """Test that different messages create new cache entries"""
-    first_messages = [Content(parts=[Part(text="First message")], role="user")]
-    second_messages = [Content(parts=[Part(text="Second message")], role="user")]
+    first_messages = [Content(parts=[Part(text="First message")], role=BaseLLMClient.user_tag)]
+    second_messages = [Content(parts=[Part(text="Second message")], role=BaseLLMClient.user_tag)]
     
     # First call
     cached_llm_client.create(first_messages)
@@ -205,7 +205,7 @@ def test_cached_llm_client_different_messages(cached_llm_client, mock_aisuite_cl
 
 def test_cached_llm_client_invalid_cache_file(cached_llm_client, mock_aisuite_client):
     """Test handling of corrupted cache file"""
-    messages = [Content(parts=[Part(text="Test message")], role="user")]
+    messages = [Content(parts=[Part(text="Test message")], role=BaseLLMClient.user_tag)]
     
     # First call to create cache file
     cached_llm_client.create(messages)

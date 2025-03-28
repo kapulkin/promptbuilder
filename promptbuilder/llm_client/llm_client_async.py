@@ -6,7 +6,7 @@ import os
 import aisuite_async
 import logging
 from promptbuilder.llm_client.messages import Response, Content, Candidate, UsageMetadata, Part
-from promptbuilder.llm_client.llm_client import AiSuiteLLMClient
+from promptbuilder.llm_client.llm_client import AiSuiteLLMClient, BaseLLMClient
 
 logger = logging.getLogger(__name__)
 
@@ -16,9 +16,15 @@ class BaseLLMClientAsync:
         """Return the model identifier used by this LLM client."""
         raise NotImplementedError    
 
+    def _internal_role(self, role: str) -> str:
+        return "user" if role == BaseLLMClient.user_tag else "assistant"
+
+    def _external_role(self, role: str) -> str:
+        return BaseLLMClient.user_tag if role == "user" else BaseLLMClient.assistant_tag
+
     async def from_text(self, prompt: str, **kwargs) -> str:
         return await self.create_text(
-            messages=[Content(parts=[Part(text=prompt)], role='user')],
+            messages=[Content(parts=[Part(text=prompt)], role=BaseLLMClient.user_tag)],
             **kwargs
         )
 
@@ -48,7 +54,7 @@ class BaseLLMClientAsync:
     async def with_system_message(self, system_message: str, input: str, **kwargs) -> str:
         return await self.create_text(
             messages=[
-                Content(parts=[Part(text=input)], role='user'),
+                Content(parts=[Part(text=input)], role=BaseLLMClient.user_tag),
             ],
             system_message=system_message,
             **kwargs
@@ -89,7 +95,7 @@ class AiSuiteLLMClientAsync(BaseLLMClientAsync):
         return self._model
 
     async def create(self, messages: List[Content], system_message: str = None, **kwargs) -> Response:
-        messages = [{ 'role': message.role, 'content': message.parts[0].text } for message in messages]
+        messages = [{ 'role': self._internal_role(message.role), 'content': message.parts[0].text } for message in messages]
 
         if system_message is not None:
             messages.insert(0, { 'role': 'system', 'content': system_message })
@@ -110,7 +116,7 @@ class AiSuiteLLMClientAsync(BaseLLMClientAsync):
                 Candidate(
                     content=Content(
                         parts=[Part(text=choice.message.content, function_call=AiSuiteLLMClient.make_function_call(tool_call) if tool_call else None)],
-                        role=choice.message.role if hasattr(choice.message, 'role') else None
+                        role=self._external_role(choice.message.role) if hasattr(choice.message, 'role') else None
                     )
                 )
                 for choice in completion.choices
