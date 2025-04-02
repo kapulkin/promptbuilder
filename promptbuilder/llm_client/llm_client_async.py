@@ -121,11 +121,7 @@ class AiSuiteLLMClientAsync(BaseLLMClientAsync):
                 )
                 for choice in completion.choices
             ],
-            usage_metadata=UsageMetadata(
-                candidates_token_count=completion.usage.completion_tokens,
-                prompt_token_count=completion.usage.prompt_tokens,
-                total_token_count=completion.usage.total_tokens
-            ) if hasattr(completion, 'usage') and completion.usage is not None else None
+            usage_metadata = AiSuiteLLMClientAsync.make_usage_metadata(completion.usage) if hasattr(completion, 'usage') and completion.usage is not None else None
         )
 
 LLMClientAsync = AiSuiteLLMClientAsync

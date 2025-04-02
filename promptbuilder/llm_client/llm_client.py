@@ -5,7 +5,7 @@ import re
 import os
 import aisuite_async
 import logging
-from promptbuilder.llm_client.messages import Completion, Response, Content, Part, UsageMetadata, Candidate, FunctionCall
+from promptbuilder.llm_client.messages import Completion, Response, Content, Part, UsageMetadata, Candidate, FunctionCall, Usage
 
 logger = logging.getLogger(__name__)
 
@@ -113,6 +113,14 @@ class AiSuiteLLMClient(BaseLLMClient):
 
         return FunctionCall(id=tool_call_id, name=tool_name, args=arguments)
 
+    @staticmethod
+    def make_usage_metadata(usage: Usage) -> UsageMetadata:
+        return UsageMetadata(
+            candidates_token_count=usage.completion_tokens if hasattr(usage, 'completion_tokens') else usage["completion_tokens"],
+            prompt_token_count=usage.prompt_tokens if hasattr(usage, 'prompt_tokens') else usage["prompt_tokens"],
+            total_token_count=usage.total_tokens if hasattr(usage, 'total_tokens') else usage["total_tokens"]
+        )
+
     def create(self, messages: List[Content], system_message: str = None, **kwargs) -> Response:
         messages = [{ 'role': self._internal_role(message.role), 'content': message.parts[0].text } for message in messages]
 
@@ -140,11 +148,7 @@ class AiSuiteLLMClient(BaseLLMClient):
                 )
                 for choice in completion.choices
             ],
-            usage_metadata=UsageMetadata(
-                candidates_token_count=completion.usage.completion_tokens,
-                prompt_token_count=completion.usage.prompt_tokens,
-                total_token_count=completion.usage.total_tokens
-            ) if hasattr(completion, 'usage') and completion.usage is not None else None
+            usage_metadata = AiSuiteLLMClient.make_usage_metadata(completion.usage) if hasattr(completion, 'usage') and completion.usage is not None else None
         )
 
 LLMClient = AiSuiteLLMClient
