@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import List, Dict, Optional, Any, Type
+from typing import List, Dict, Optional, Any, Type, Callable
 import logging
 
 logger = logging.getLogger(__name__)
@@ -120,3 +120,4 @@ class FunctionDeclaration(BaseModel):
 
 class Tool(BaseModel):
     function_declarations: Optional[List[FunctionDeclaration]] = None
+    callable: Optional[Callable] = None

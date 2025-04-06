@@ -7,6 +7,7 @@ import aisuite_async
 import logging
 from promptbuilder.llm_client.messages import Response, Content, Candidate, UsageMetadata, Part
 from promptbuilder.llm_client.llm_client import AiSuiteLLMClient, BaseLLMClient
+from aisuite_async.utils.tools import Tools
 
 logger = logging.getLogger(__name__)
 
@@ -99,6 +100,11 @@ class AiSuiteLLMClientAsync(BaseLLMClientAsync):
 
         if system_message is not None:
             messages.insert(0, { 'role': 'system', 'content': system_message })
+
+        tools = kwargs.get('tools', None)
+        if tools is not None:
+            tools_instance = Tools([tool.callable for tool in tools])
+            kwargs["tools"] = tools_instance.tools()
 
         completion = await self.client.chat.completions.create(
             model=self.model,

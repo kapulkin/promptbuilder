@@ -5,17 +5,24 @@ from promptbuilder.agent.context import Context
 from promptbuilder.prompt_builder import PromptBuilder
 from pydantic import Field, create_model
 from promptbuilder.llm_client.messages import Content, Part, Tool
+from enum import Enum
 from promptbuilder.agent.utils import run_async
 import logging
 
 logger = logging.getLogger(__name__)
 
-ContextType = TypeVar("ContextType", bound=Context)
+MessageType = TypeVar("MessageType", bound=Any)
+ContextType = TypeVar("ContextType", bound=Context[Any])
 
-class Agent(Generic[ContextType]):
-    def __init__(self, llm_client: BaseLLMClient | BaseLLMClientAsync, context: ContextType):
+class MessageFormat(Enum):
+    MESSAGES_LIST = 0
+    ONE_MESSAGE = 1
+
+class Agent(Generic[MessageType, ContextType]):
+    def __init__(self, llm_client: BaseLLMClient | BaseLLMClientAsync, context: ContextType, message_format: MessageFormat = MessageFormat.MESSAGES_LIST):
         self.llm_client = llm_client
         self.context = context
+        self.message_format = message_format
 
     async def __call__(self, **kwargs: Any) -> str:
         raise NotImplementedError("Agent is not implemented")
@@ -23,30 +30,44 @@ class Agent(Generic[ContextType]):
     def system_message(self, **kwargs: Any) -> str:
         raise NotImplementedError("System message is not implemented")
 
+    def _messages_to_one_message(self, messages: list[Content]) -> Content:
+        text = "\n".join([
+            f"{message.role}: {message.parts[0].text}"
+            for message in messages
+        ])
+        return Content(parts=[Part(text=text)], role=BaseLLMClient.user_tag)
+
+    def _formatted_messages(self, messages: list[Content]) -> list[Content]:
+        if self.message_format == MessageFormat.ONE_MESSAGE:
+            return [self._messages_to_one_message(messages)]
+        else:
+            return messages
+
     async def _answer_with_llm(self, **kwargs: Any):
+        messages = self._formatted_messages(self.context.dialog_history.last_messages())
         return await run_async(self.llm_client.create,
-            messages=[Content(parts=[Part(text=msg.content)], role=msg.role) for msg in self.context.dialog_history.last_messages()],
+            messages=messages,
             system_message=self.system_message(**kwargs),
             **kwargs
         )
 
-
-class AgentRouter(Agent[ContextType]):
-    def __init__(self, llm_client: BaseLLMClient, context: ContextType):
-        super().__init__(llm_client, context)
+class AgentRouter(Agent[MessageType, ContextType]):
+    def __init__(self, llm_client: BaseLLMClient | BaseLLMClientAsync, context: ContextType, message_format: MessageFormat = MessageFormat.MESSAGES_LIST):
+        super().__init__(llm_client, context, message_format)
         self.callable_tools: dict[str, CallableTool] = {}
         self.routes: dict[str, CallableTool] = {}
         self.last_used_tool_name = None
     
-    async def __call__(self, user_message: str, tools_to_exclude: set[str] = set(), **kwargs: Any) -> str:
-        if len(tools_to_exclude) > 0:
-            self.context.dialog_history.add_message(Content(parts=[Part(text=user_message)], role=BaseLLMClient.user_tag))
+    async def __call__(self, user_message: MessageType, tools_to_exclude: set[str] = set(), **kwargs: Any) -> str:
+        if len(tools_to_exclude) == 0:
+            self.context.dialog_history.add_message(user_message)
 
         callable_tools = [callable_tool for callable_tool in self.callable_tools.values() if callable_tool.name not in tools_to_exclude]
         tools = [callable_tool.tool for callable_tool in callable_tools]
 
-        response = await self.llm_client.create(
-            messages=[Content(parts=[Part(text=msg.content)], role=msg.role) for msg in self.context.dialog_history.last_messages()],
+        messages = self._formatted_messages(self.context.dialog_history.last_messages())
+        response = await run_async(self.llm_client.create,
+            messages=messages,
             system_message=self.system_message(callable_tools=callable_tools),
             tools=tools
         )
@@ -56,7 +77,7 @@ class AgentRouter(Agent[ContextType]):
         for part in content.parts:
             if part.function_call is not None:
                 tool_name = part.function_call.name
-                args = part.function_call.arguments
+                args = part.function_call.args
                 break
 
         if tool_name is not None:
@@ -64,9 +85,12 @@ class AgentRouter(Agent[ContextType]):
             if route is not None:
                 self.last_used_tool_name = tool_name
                 logger.debug("Route %s called with args: %s", tool_name, args)
-                result = await route(**args)
+                merged_args = {**kwargs, **args}
+                result = await route(**merged_args)
                 logger.debug("Route %s result: %s", tool_name, result)
-                return result
+                if result is not None and isinstance(result, str):
+                    self.context.dialog_history.add_message(Content(parts=[Part(text=result)], role="assistant"))
+                return
             
             callable_tool = self.callable_tools.get(tool_name)
             if callable_tool is not None:
@@ -128,7 +152,7 @@ class AgentRouter(Agent[ContextType]):
         return callable_tool
 
     def add_route(self, func: Callable[[...], Any], arg_descriptions: dict[str, str] = {}):
-        callable_tool = self.tool(func, arg_descriptions)
+        callable_tool = self.add_tool(func, arg_descriptions)
         self.routes[callable_tool.name] = callable_tool
         return callable_tool
 
@@ -143,4 +167,3 @@ class AgentRouter(Agent[ContextType]):
             self.add_route(func, arg_descriptions)
             return func
         return decorator
-

@@ -1,8 +1,11 @@
+#%%
+# %cd ..
+#%%
 from typing import List
 from pydantic import BaseModel, Field
-from promptbuilder.agent.agent import AgentRouter
+from promptbuilder.agent.agent import AgentRouter, MessageFormat
 from promptbuilder.agent.context import Context, InMemoryDialogHistory
-from promptbuilder.llm_client.messages import Content
+from promptbuilder.llm_client.messages import Content, Part
 from promptbuilder.llm_client import LLMClient
 import os
 import dotenv
@@ -12,19 +15,15 @@ class TodoItem(BaseModel):
     description: str = Field(..., description="Description of the todo item")
     quantity: int = Field(1, description="Quantity of items (default is 1)")
 
-class TodoListContext(Context):
+class TodoListContext(Context[InMemoryDialogHistory]):
     todos: List[TodoItem] = []
 
     def __init__(self):
         super().__init__(dialog_history=InMemoryDialogHistory())
 
-class TodoListAgent(AgentRouter[TodoListContext]):
-    def __init__(self, llm_client: LLMClient, context: TodoListContext):
-        super().__init__(llm_client=llm_client, context=context)
-
-        self.add_todo_agent = AddTodoAgent()
-
-        self.add_route(self.add_todo_agent)
+class TodoListAgent(AgentRouter[InMemoryDialogHistory, TodoListContext]):
+    def __init__(self, llm_client: LLMClient, context: TodoListContext, **kwargs):
+        super().__init__(llm_client=llm_client, context=context, **kwargs)
 
     def description(self) -> str:
         return """You are a helpful TODO list manager. You can:
@@ -46,21 +45,21 @@ Please help users manage their todo list by using the appropriate tools."""
 
 
 dotenv.load_dotenv()
-agent = TodoListAgent(llm_client=LLMClient(), context=TodoListContext())
+agent = TodoListAgent(llm_client=LLMClient(), context=TodoListContext(), message_format=MessageFormat.ONE_MESSAGE)
 
-@agent.tool({"item": "Todo item to add"})
-async def add_todo(item: TodoItem) -> str:
+@agent.route({"description": "Description of the todo item", "quantity": "Quantity of items (default is 1)"})
+async def add_todo(description: str, quantity: int = 1) -> str:
     """"Add a new todo item to the list"""
-    agent.context.todos.append(item)
-    quantity_str = f" (x{item.quantity})" if item.quantity > 1 else ""
-    return f"Added todo item: {item.description}{quantity_str}\n\nCurrent todo list:\n{agent._formatted_list}"
+    agent.context.todos.append(TodoItem(description=description, quantity=quantity))
+    quantity_str = f" (x{quantity})" if quantity > 1 else ""
+    return f"Added todo item: {description}{quantity_str}\n\nCurrent todo list:\n{agent._formatted_list}"
 
-@agent.tool()
+@agent.route()
 async def show_todos() -> str:
     """Show all todo items in the list"""
     return f"Current todo list:\n{agent._formatted_list}"
 
-@agent.tool({"index": "Index of the todo item to delete (starting from 1)"})
+@agent.route({"index": "Index of the todo item to delete (starting from 1)"})
 async def delete_todo(index: int) -> str:
     """Delete a todo item by its index"""
     if not agent.context.todos:
@@ -85,9 +84,12 @@ async def main():
     
     for msg in messages:
         print(f"\nUser: {msg}")
-        response = await agent(msg)
+        await agent(Content(parts=[Part(text=msg)], role="user"))
+        response = agent.context.dialog_history.last_messages()[-1].parts[0].text
         print(f"Assistant: {response}")
-
+# %%
 if __name__ == "__main__":
     import asyncio
     asyncio.run(main())
+    # await main()
+# %%

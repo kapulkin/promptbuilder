@@ -6,6 +6,8 @@ import os
 import aisuite_async
 import logging
 from promptbuilder.llm_client.messages import Completion, Response, Content, Part, UsageMetadata, Candidate, FunctionCall, Usage
+from aisuite_async.utils.tools import Tools
+
 
 logger = logging.getLogger(__name__)
 
@@ -126,6 +128,11 @@ class AiSuiteLLMClient(BaseLLMClient):
 
         if system_message is not None:
             messages.insert(0, { 'role': 'system', 'content': system_message })
+
+        tools = kwargs.get('tools', None)
+        if tools is not None:
+            tools_instance = Tools([tool.callable for tool in tools])
+            kwargs["tools"] = tools_instance.tools()
 
         completion = self.client.chat.completions.create(
             model=self.model,

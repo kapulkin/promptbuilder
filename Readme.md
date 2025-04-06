@@ -52,7 +52,7 @@ print(response)
 from typing import List
 from pydantic import BaseModel, Field
 from promptbuilder.agent.agent import AgentRouter
-from promptbuilder.agent.context import Context
+from promptbuilder.agent.context import Context, InMemoryDialogHistory
 from promptbuilder.agent.message import Message
 from promptbuilder.llm_client import LLMClient
 
@@ -64,11 +64,11 @@ class AddTodoArgs(BaseModel):
 class TodoItem(BaseModel):
     description: str = Field(..., description="Description of the todo item")
 
-class TodoListContext(Context):
+class TodoListContext(Context[InMemoryDialogHistory]):
     todos: List[TodoItem] = []
 
 # Create agent with tools
-class TodoListAgent(AgentRouter[TodoListContext]):
+class TodoListAgent(AgentRouter[InMemoryDialogHistory, TodoListContext]):
     def __init__(self, llm_client: LLMClient, context: TodoListContext):
         super().__init__(llm_client=llm_client, context=context)
     

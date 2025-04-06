@@ -48,6 +48,7 @@ class CallableTool(BaseModel):
                         else None
                     )
                 )
-            ]
+            ],
+            callable=self.function
         )
 
