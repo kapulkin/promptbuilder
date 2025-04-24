@@ -3,6 +3,7 @@ from promptbuilder.llm_client.base_configs import base_decorator_configs
 from promptbuilder.llm_client.utils import DecoratorConfigs
 from promptbuilder.llm_client.google_client import GoogleLLMClient, GoogleLLMClientAsync
 from promptbuilder.llm_client.anthropic_client import AnthropicLLMClient, AnthropicLLMClientAsync
+from promptbuilder.llm_client.openai_client import OpenaiLLMClient, OpenaiLLMClientAsync
 
 
 _memory: dict[str, BaseLLMClient] = {}
@@ -22,6 +23,10 @@ def get_client(model: str, decorator_configs: DecoratorConfigs | None = None, de
             return _memory[model]
         elif provider_name == "anthropic":
             client = AnthropicLLMClient(model_name, decorator_configs=decorator_configs, default_max_tokens=default_max_tokens)
+            _memory[model] = client
+            return _memory[model]
+        elif provider_name == "openai":
+            client = OpenaiLLMClient(model_name, decorator_configs=decorator_configs, default_max_tokens=default_max_tokens)
             _memory[model] = client
             return _memory[model]
         else:
@@ -48,6 +53,10 @@ def get_async_client(model: str, decorator_configs: DecoratorConfigs | None = No
             return _memory_async[model]
         elif provider_name == "anthropic":
             client = AnthropicLLMClientAsync(model_name, decorator_configs=decorator_configs, default_max_tokens=default_max_tokens)
+            _memory_async[model] = client
+            return _memory_async[model]
+        elif provider_name == "openai":
+            client = OpenaiLLMClientAsync(model_name, decorator_configs=decorator_configs, default_max_tokens=default_max_tokens)
             _memory_async[model] = client
             return _memory_async[model]
         else:

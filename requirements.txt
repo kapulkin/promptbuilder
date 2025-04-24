@@ -4,3 +4,4 @@ aisuite-async
 pytest
 google-genai
 anthropic
+openai

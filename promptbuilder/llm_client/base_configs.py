@@ -11,6 +11,13 @@ base_decorator_configs = defaultdict(lambda: DecoratorConfigs(), {
     "anthropic:claude-3-5-haiku-latest": DecoratorConfigs(retry=RetryConfig(times=3, delay=1), rpm_limit=RpmLimitConfig(rpm_limit=50)),
     "anthropic:claude-3-5-sonnet-latest": DecoratorConfigs(retry=RetryConfig(times=3, delay=1), rpm_limit=RpmLimitConfig(rpm_limit=50)),
     "anthropic:claude-3-opus-latest": DecoratorConfigs(retry=RetryConfig(times=3, delay=1), rpm_limit=RpmLimitConfig(rpm_limit=50)),
+    "openai:o4-mini": DecoratorConfigs(retry=RetryConfig(times=3, delay=1), rpm_limit=RpmLimitConfig(rpm_limit=1000)),
+    "openai:o3-mini": DecoratorConfigs(retry=RetryConfig(times=3, delay=1), rpm_limit=RpmLimitConfig(rpm_limit=1000)),
+    "openai:gpt-4.1": DecoratorConfigs(retry=RetryConfig(times=3, delay=1), rpm_limit=RpmLimitConfig(rpm_limit=500)),
+    "openai:gpt-4.1-nano": DecoratorConfigs(retry=RetryConfig(times=3, delay=1), rpm_limit=RpmLimitConfig(rpm_limit=500)),
+    "openai:gpt-4.1-mini": DecoratorConfigs(retry=RetryConfig(times=3, delay=1), rpm_limit=RpmLimitConfig(rpm_limit=500)),
+    "openai:gpt-4o": DecoratorConfigs(retry=RetryConfig(times=3, delay=1), rpm_limit=RpmLimitConfig(rpm_limit=500)),
+    "openai:gpt-4o-mini": DecoratorConfigs(retry=RetryConfig(times=3, delay=1), rpm_limit=RpmLimitConfig(rpm_limit=500)),
 })
 
 base_default_max_tokens_configs = defaultdict(lambda: 8192)
