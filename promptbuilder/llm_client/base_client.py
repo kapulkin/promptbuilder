@@ -2,7 +2,7 @@ import re
 import json
 from typing import Awaitable, Iterator, AsyncIterator, Literal, overload
 
-from promptbuilder.llm_client.messages import Response, Content, Part, Json, PydanticStructure
+from promptbuilder.llm_client.messages import Response, Content, Part, Json, ThinkingConfig, PydanticStructure
 import promptbuilder.llm_client.utils as utils
 
 
@@ -10,11 +10,9 @@ type ResultType = Literal["json"] | type[PydanticStructure] | None
 
 
 class BaseLLMClient(utils.InheritDecoratorsMixin):
-    user_tag: str = "user"
-    assistant_tag: str = "model"
-
-    def __init__(self, decorator_configs: utils.DecoratorConfigs = utils.DecoratorConfigs(), **kwargs):
+    def __init__(self, decorator_configs: utils.DecoratorConfigs = utils.DecoratorConfigs(), default_max_tokens: int = 8192, **kwargs):
         self._decorator_configs = decorator_configs
+        self.default_max_tokens = default_max_tokens
     
     @property
     def model(self) -> str:
@@ -39,22 +37,23 @@ class BaseLLMClient(utils.InheritDecoratorsMixin):
 
     @utils.retry_cls
     @utils.rpm_limit_cls
-    def generate_response(self, messages: list[Content], result_type: ResultType = None, use_thinking: bool = False, system_message: str | None = None, **kwargs) -> Response:
+    def create(self, messages: list[Content], result_type: ResultType = None, thinking_config: ThinkingConfig = ThinkingConfig(), system_message: str | None = None, max_tokens: int | None = None, **kwargs) -> Response:
         raise NotImplementedError
     
     @overload
-    def create(self, messages: list[Content], result_type: None = None, use_thinking: bool = False, system_message: str | None = None, **kwargs) -> str: ...
+    def create_value(self, messages: list[Content], result_type: None = None, thinking_config: ThinkingConfig = ThinkingConfig(), system_message: str | None = None, max_tokens: int | None = None, **kwargs) -> str: ...
     @overload
-    def create(self, messages: list[Content], result_type: Literal["json"], use_thinking: bool = False, system_message: str | None = None, **kwargs) -> Json: ...
+    def create_value(self, messages: list[Content], result_type: Literal["json"], thinking_config: ThinkingConfig = ThinkingConfig(), system_message: str | None = None, max_tokens: int | None = None, **kwargs) -> Json: ...
     @overload
-    def create(self, messages: list[Content], result_type: type[PydanticStructure], use_thinking: bool = False, system_message: str | None = None, **kwargs) -> PydanticStructure: ...
+    def create_value(self, messages: list[Content], result_type: type[PydanticStructure], thinking_config: ThinkingConfig = ThinkingConfig(), system_message: str | None = None, max_tokens: int | None = None, **kwargs) -> PydanticStructure: ...
 
-    def create(self, messages: list[Content], result_type: ResultType = None, use_thinking: bool = False, system_message: str | None = None, **kwargs):
-        response = self.generate_response(
+    def create_value(self, messages: list[Content], result_type: ResultType = None, thinking_config: ThinkingConfig = ThinkingConfig(), system_message: str | None = None, max_tokens: int | None = None, **kwargs):
+        response = self.create(
             messages=messages,
             result_type=result_type,
-            use_thinking=use_thinking,
+            thinking_config=thinking_config,
             system_message=system_message,
+            max_tokens=max_tokens,
             **kwargs,
         )
         if result_type is None:
@@ -62,32 +61,31 @@ class BaseLLMClient(utils.InheritDecoratorsMixin):
         else:
             return response.parsed
     
-    def create_stream(self, messages: list[Content], system_message: str | None = None, **kwargs) -> Iterator[Response]:
+    def create_stream(self, messages: list[Content], system_message: str | None = None, max_tokens: int | None = None, **kwargs) -> Iterator[Response]:
         raise NotImplementedError
     
     @overload
-    def from_text(self, prompt: str, result_type: None = None, use_thinking: bool = False, system_message: str | None = None, **kwargs) -> str: ...
+    def from_text(self, prompt: str, result_type: None = None, thinking_config: ThinkingConfig = ThinkingConfig(), system_message: str | None = None, max_tokens: int | None = None, **kwargs) -> str: ...
     @overload
-    def from_text(self, prompt: str, result_type: Literal["json"], use_thinking: bool = False, system_message: str | None = None, **kwargs) -> Json: ...
+    def from_text(self, prompt: str, result_type: Literal["json"], thinking_config: ThinkingConfig = ThinkingConfig(), system_message: str | None = None, max_tokens: int | None = None, **kwargs) -> Json: ...
     @overload
-    def from_text(self, prompt: str, result_type: type[PydanticStructure], use_thinking: bool = False, system_message: str | None = None, **kwargs) -> PydanticStructure: ...
+    def from_text(self, prompt: str, result_type: type[PydanticStructure], thinking_config: ThinkingConfig = ThinkingConfig(), system_message: str | None = None, max_tokens: int | None = None, **kwargs) -> PydanticStructure: ...
     
-    def from_text(self, prompt: str, result_type: ResultType = None, use_thinking: bool = False, system_message: str | None = None, **kwargs):
-        return self.create(
-            messages=[Content(parts=[Part(text=prompt)], role=BaseLLMClient.user_tag)],
+    def from_text(self, prompt: str, result_type: ResultType = None, thinking_config: ThinkingConfig = ThinkingConfig(), system_message: str | None = None, max_tokens: int | None = None, **kwargs):
+        return self.create_value(
+            messages=[Content(parts=[Part(text=prompt)], role="user")],
             result_type=result_type,
-            use_thinking=use_thinking,
+            thinking_config=thinking_config,
             system_message=system_message,
+            max_tokens=max_tokens,
             **kwargs,
         )
 
 
 class BaseLLMClientAsync(utils.InheritDecoratorsMixin):
-    user_tag: str = "user"
-    assistant_tag: str = "model"
-    
-    def __init__(self, decorator_configs: utils.DecoratorConfigs = utils.DecoratorConfigs(), **kwargs):
+    def __init__(self, decorator_configs: utils.DecoratorConfigs = utils.DecoratorConfigs(), default_max_tokens: int = 8192, **kwargs):
         self._decorator_configs = decorator_configs
+        self.default_max_tokens = default_max_tokens
 
     @property
     def model(self) -> str:
@@ -112,22 +110,23 @@ class BaseLLMClientAsync(utils.InheritDecoratorsMixin):
 
     @utils.retry_cls_async
     @utils.rpm_limit_cls_async
-    async def generate_response(self, messages: list[Content], result_type: ResultType = None, use_thinking: bool = False, system_message: str | None = None, **kwargs) -> Response:
+    async def create(self, messages: list[Content], result_type: ResultType = None, thinking_config: ThinkingConfig = ThinkingConfig(), system_message: str | None = None, max_tokens: int | None = None, **kwargs) -> Response:
         raise NotImplementedError
     
     @overload
-    async def create(self, messages: list[Content], result_type: None = None, use_thinking: bool = False, system_message: str | None = None, **kwargs) -> str: ...
+    async def create_value(self, messages: list[Content], result_type: None = None, thinking_config: ThinkingConfig = ThinkingConfig(), system_message: str | None = None, max_tokens: int | None = None, **kwargs) -> str: ...
     @overload
-    async def create(self, messages: list[Content], result_type: Literal["json"], use_thinking: bool = False, system_message: str | None = None, **kwargs) -> Json: ...
+    async def create_value(self, messages: list[Content], result_type: Literal["json"], thinking_config: ThinkingConfig = ThinkingConfig(), system_message: str | None = None, max_tokens: int | None = None, **kwargs) -> Json: ...
     @overload
-    async def create(self, messages: list[Content], result_type: type[PydanticStructure], use_thinking: bool = False, system_message: str | None = None, **kwargs) -> PydanticStructure: ...
+    async def create_value(self, messages: list[Content], result_type: type[PydanticStructure], thinking_config: ThinkingConfig = ThinkingConfig(), system_message: str | None = None, max_tokens: int | None = None, **kwargs) -> PydanticStructure: ...
 
-    async def create(self, messages: list[Content], result_type: ResultType = None, use_thinking: bool = False, system_message: str | None = None, **kwargs):
-        response = await self.generate_response(
+    async def create_value(self, messages: list[Content], result_type: ResultType = None, thinking_config: ThinkingConfig = ThinkingConfig(), system_message: str | None = None, max_tokens: int | None = None, **kwargs):
+        response = await self.create(
             messages=messages,
             result_type=result_type,
-            use_thinking=use_thinking,
+            thinking_config=thinking_config,
             system_message=system_message,
+            max_tokens=max_tokens,
             **kwargs,
         )
         if result_type is None:
@@ -135,21 +134,22 @@ class BaseLLMClientAsync(utils.InheritDecoratorsMixin):
         else:
             return response.parsed
     
-    async def create_stream(self, messages: list[Content], system_message: str | None = None, **kwargs) -> Awaitable[AsyncIterator[Response]]:
+    async def create_stream(self, messages: list[Content], system_message: str | None = None, max_tokens: int | None = None, **kwargs) -> Awaitable[AsyncIterator[Response]]:
         raise NotImplementedError
     
     @overload
-    async def from_text(self, prompt: str, result_type: None = None, use_thinking: bool = False, system_message: str | None = None, **kwargs) -> str: ...
+    async def from_text(self, prompt: str, result_type: None = None, thinking_config: ThinkingConfig = ThinkingConfig(), system_message: str | None = None, max_tokens: int | None = None, **kwargs) -> str: ...
     @overload
-    async def from_text(self, prompt: str, result_type: Literal["json"], use_thinking: bool = False, system_message: str | None = None, **kwargs) -> Json: ...
+    async def from_text(self, prompt: str, result_type: Literal["json"], thinking_config: ThinkingConfig = ThinkingConfig(), system_message: str | None = None, max_tokens: int | None = None, **kwargs) -> Json: ...
     @overload
-    async def from_text(self, prompt: str, result_type: type[PydanticStructure], use_thinking: bool = False, system_message: str | None = None, **kwargs) -> PydanticStructure: ...
+    async def from_text(self, prompt: str, result_type: type[PydanticStructure], thinking_config: ThinkingConfig = ThinkingConfig(), system_message: str | None = None, max_tokens: int | None = None, **kwargs) -> PydanticStructure: ...
     
-    async def from_text(self, prompt: str, result_type: ResultType = None, use_thinking: bool = False, system_message: str | None = None, **kwargs):
-        return await self.create(
-            messages=[Content(parts=[Part(text=prompt)], role=BaseLLMClient.user_tag)],
+    async def from_text(self, prompt: str, result_type: ResultType = None, thinking_config: ThinkingConfig = ThinkingConfig(), system_message: str | None = None, max_tokens: int | None = None, **kwargs):
+        return await self.create_value(
+            messages=[Content(parts=[Part(text=prompt)], role="user")],
             result_type=result_type,
-            use_thinking=use_thinking,
+            thinking_config=thinking_config,
             system_message=system_message,
+            max_tokens=max_tokens,
             **kwargs,
         )

@@ -3,3 +3,4 @@ aisuite
 aisuite-async
 pytest
 google-genai
+anthropic

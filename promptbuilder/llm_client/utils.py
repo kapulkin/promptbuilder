@@ -3,7 +3,7 @@ import asyncio
 import logging
 import traceback
 from functools import wraps
-from typing import Callable, Awaitable, Any, ParamSpec, TypeVar
+from typing import Callable, Awaitable, ParamSpec, TypeVar
 from collections import defaultdict
 
 from pydantic import BaseModel

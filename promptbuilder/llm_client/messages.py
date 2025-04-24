@@ -1,7 +1,7 @@
 import logging
-from typing import Optional, Any, Type, Callable, Literal, TypeVar
+from typing import Optional, Any, Type, Callable, Literal, TypeVar, Self
 
-from pydantic import BaseModel
+from pydantic import BaseModel, model_validator
 
 
 logger = logging.getLogger(__name__)
@@ -43,10 +43,23 @@ class Part(BaseModel):
     function_call: Optional[FunctionCall] = None
     function_response: Optional[FunctionResponse] = None
     thought: Optional[bool] = None
+    
+    def as_str(self) -> str:
+        if self.text is not None:
+            return self.text
+        if self.thought is not None:
+            return self.thought
+        return ""
 
 class Content(BaseModel):
     parts: Optional[list[Part]] = None
     role: Optional[Role] = None
+    
+    def as_str(self) -> str:
+        if self.parts is None:
+            return ""
+        else:
+            return "\n".join([part.as_str() for part in self.parts])
 
 class Candidate(BaseModel):
     content: Optional[Content] = None
@@ -56,6 +69,16 @@ class UsageMetadata(BaseModel):
     candidates_token_count: Optional[int] = None
     prompt_token_count: Optional[int] = None
     total_token_count: Optional[int] = None
+
+class ThinkingConfig(BaseModel):
+    include_thoughts: Optional[bool] = None
+    thinking_budget: Optional[int] = None
+    
+    @model_validator(mode="after")
+    def validate_all_fields_at_the_same_time(self) -> Self:
+        if self.include_thoughts and self.thinking_budget is None:
+            raise ValueError("To use thinking you must specify a thinking_budget")
+        return self
 
 class Response(BaseModel):
     candidates: Optional[list[Candidate]] = None
