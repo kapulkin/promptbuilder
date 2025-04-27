@@ -95,7 +95,10 @@ class AiSuiteLLMClient(BaseLLMClient):
         
         if tools is not None:            
             aisuite_tools = []
-            allowed_function_names = tool_config.function_calling_config.allowed_function_names
+            if tool_config.function_calling_config is not None:
+                allowed_function_names = tool_config.function_calling_config.allowed_function_names
+            else:
+                allowed_function_names = None
             for tool in tools:
                 for func_decl in tool.function_declarations:
                     if allowed_function_names is None or func_decl.name in allowed_function_names:
@@ -103,19 +106,16 @@ class AiSuiteLLMClient(BaseLLMClient):
                         if parameters is not None:
                             parameters = parameters.model_dump(exclude_none=True)
                         else:
-                            parameters = {"type": "object", "properties": {}}
+                            parameters = {"type": "object", "properties": {}, "required": [], "additionalProperties": False}
                         aisuite_tools.append({
-                            "name": func_decl.name,
-                            "description": func_decl.description,
-                            "parameters": parameters,
+                            "type": "function",
+                            "function": {
+                                "name": func_decl.name,
+                                "description": func_decl.description,
+                                "parameters": parameters,
+                            },
                         })
             aisuite_kwargs["tools"] = aisuite_tools
-            
-            tool_choice_mode = "AUTO"
-            if tool_config.function_calling_config is not None:
-                if tool_config.function_calling_config.mode is not None:
-                    tool_choice_mode = tool_config.function_calling_config.mode
-            aisuite_kwargs["tool_choice"] = tool_choice_mode.lower()
         
         if result_type is None:
             response = self.client.chat.completions.create(**aisuite_kwargs)
@@ -128,7 +128,7 @@ class AiSuiteLLMClient(BaseLLMClient):
                         tool_calls = [tool_calls]
                     for tool_call in tool_calls:
                         parts.append(Part(function_call=self.make_function_call(tool_call)))
-                elif choice.message.content is not None:
+                if choice.message.content is not None:
                     parts.append(Part(text=choice.message.content))
 
             return Response(
@@ -150,7 +150,7 @@ class AiSuiteLLMClient(BaseLLMClient):
                         tool_calls = [tool_calls]
                     for tool_call in tool_calls:
                         parts.append(Part(function_call=self.make_function_call(tool_call)))
-                elif choice.message.content is not None:
+                if choice.message.content is not None:
                     text += choice.message.content + "\n"
                     parts.append(Part(text=choice.message.content))
             parsed = self._as_json(text)
@@ -179,7 +179,7 @@ class AiSuiteLLMClient(BaseLLMClient):
                         tool_calls = [tool_calls]
                     for tool_call in tool_calls:
                         parts.append(Part(function_call=self.make_function_call(tool_call)))
-                elif choice.message.content is not None:
+                if choice.message.content is not None:
                     text += choice.message.content + "\n"
                     parts.append(Part(text=choice.message.content))
             parsed = self._as_json(text)
@@ -281,7 +281,10 @@ class AiSuiteLLMClientAsync(BaseLLMClientAsync):
         
         if tools is not None:            
             aisuite_tools = []
-            allowed_function_names = tool_config.function_calling_config.allowed_function_names
+            if tool_config.function_calling_config is not None:
+                allowed_function_names = tool_config.function_calling_config.allowed_function_names
+            else:
+                allowed_function_names = None
             for tool in tools:
                 for func_decl in tool.function_declarations:
                     if allowed_function_names is None or func_decl.name in allowed_function_names:
@@ -289,19 +292,16 @@ class AiSuiteLLMClientAsync(BaseLLMClientAsync):
                         if parameters is not None:
                             parameters = parameters.model_dump(exclude_none=True)
                         else:
-                            parameters = {"type": "object", "properties": {}}
+                            parameters = {"type": "object", "properties": {}, "required": [], "additionalProperties": False}
                         aisuite_tools.append({
-                            "name": func_decl.name,
-                            "description": func_decl.description,
-                            "parameters": parameters,
+                            "type": "function",
+                            "function": {
+                                "name": func_decl.name,
+                                "description": func_decl.description,
+                                "parameters": parameters,
+                            },
                         })
             aisuite_kwargs["tools"] = aisuite_tools
-            
-            tool_choice_mode = "AUTO"
-            if tool_config.function_calling_config is not None:
-                if tool_config.function_calling_config.mode is not None:
-                    tool_choice_mode = tool_config.function_calling_config.mode
-            aisuite_kwargs["tool_choice"] = tool_choice_mode.lower()
         
         if result_type is None:
             response = await self.client.chat.completions.create(**aisuite_kwargs)
@@ -314,7 +314,7 @@ class AiSuiteLLMClientAsync(BaseLLMClientAsync):
                         tool_calls = [tool_calls]
                     for tool_call in tool_calls:
                         parts.append(Part(function_call=self.make_function_call(tool_call)))
-                elif choice.message.content is not None:
+                if choice.message.content is not None:
                     parts.append(Part(text=choice.message.content))
 
             return Response(
@@ -336,7 +336,7 @@ class AiSuiteLLMClientAsync(BaseLLMClientAsync):
                         tool_calls = [tool_calls]
                     for tool_call in tool_calls:
                         parts.append(Part(function_call=self.make_function_call(tool_call)))
-                elif choice.message.content is not None:
+                if choice.message.content is not None:
                     text += choice.message.content + "\n"
                     parts.append(Part(text=choice.message.content))
             parsed = self._as_json(text)
@@ -365,7 +365,7 @@ class AiSuiteLLMClientAsync(BaseLLMClientAsync):
                         tool_calls = [tool_calls]
                     for tool_call in tool_calls:
                         parts.append(Part(function_call=self.make_function_call(tool_call)))
-                elif choice.message.content is not None:
+                if choice.message.content is not None:
                     text += choice.message.content + "\n"
                     parts.append(Part(text=choice.message.content))
             parsed = self._as_json(text)
