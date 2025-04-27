@@ -1,11 +1,11 @@
 import os
-from typing import Awaitable, AsyncIterator, Iterator
+from typing import AsyncIterator, Iterator
 
 from pydantic import BaseModel
 from google.genai import Client, types
 
 from promptbuilder.llm_client.base_client import BaseLLMClient, BaseLLMClientAsync, ResultType
-from promptbuilder.llm_client.messages import Response, Content, ThinkingConfig
+from promptbuilder.llm_client.messages import Response, Content, ThinkingConfig, Tool, ToolConfig
 from promptbuilder.llm_client.base_configs import DecoratorConfigs, base_decorator_configs, base_default_max_tokens_configs
 
 
@@ -34,17 +34,20 @@ class GoogleLLMClient(BaseLLMClient):
         self,
         messages: list[Content],
         result_type: ResultType = None,
+        *,
         thinking_config: ThinkingConfig = ThinkingConfig(),
         system_message: str | None = None,
         max_tokens: int | None = None,
-        **kwargs,
+        tools: list[Tool] | None = None,
+        tool_config: ToolConfig = ToolConfig(),
     ) -> Response:
         if max_tokens is None:
             max_tokens = self.default_max_tokens
         config = types.GenerateContentConfig(
             system_instruction=system_message,
             max_output_tokens=max_tokens,
-            **kwargs,
+            tools=tools,
+            tool_config=tool_config,
         )
         if thinking_config.include_thoughts:
             config.thinking_config = thinking_config
@@ -75,13 +78,13 @@ class GoogleLLMClient(BaseLLMClient):
     def create_stream(
         self,
         messages: list[Content],
+        *,
         system_message: str | None = None,
         max_tokens: int | None = None,
-        **kwargs,
     ) -> Iterator[Response]:
         if max_tokens is None:
             max_tokens = self.default_max_tokens
-        config = types.GenerateContentConfig(system_instruction=system_message, max_output_tokens=max_tokens, **kwargs)
+        config = types.GenerateContentConfig(system_instruction=system_message, max_output_tokens=max_tokens)
         response = self.client.models.generate_content_stream(
             model=self._model,
             contents=messages,
@@ -115,17 +118,20 @@ class GoogleLLMClientAsync(BaseLLMClientAsync):
         self,
         messages: list[Content],
         result_type: ResultType = None,
+        *,
         thinking_config: ThinkingConfig = ThinkingConfig(),
         system_message: str | None = None,
         max_tokens: int | None = None,
-        **kwargs,
+        tools: list[Tool] | None = None,
+        tool_config: ToolConfig = ToolConfig(),
     ) -> Response:
         if max_tokens is None:
             max_tokens = self.default_max_tokens
         config = types.GenerateContentConfig(
             system_instruction=system_message,
             max_output_tokens=max_tokens,
-            **kwargs,
+            tools=tools,
+            tool_config=tool_config,
         )
         if thinking_config.include_thoughts:
             config.thinking_config = thinking_config
@@ -156,13 +162,13 @@ class GoogleLLMClientAsync(BaseLLMClientAsync):
     async def create_stream(
         self,
         messages: list[Content],
+        *,
         system_message: str | None = None,
         max_tokens: int | None = None,
-        **kwargs,
-    ) -> Awaitable[AsyncIterator[Response]]:
+    ) -> AsyncIterator[Response]:
         if max_tokens is None:
             max_tokens = self.default_max_tokens
-        config = types.GenerateContentConfig(system_instruction=system_message, max_output_tokens=max_tokens, **kwargs)
+        config = types.GenerateContentConfig(system_instruction=system_message, max_output_tokens=max_tokens)
         response = await self.client.aio.models.generate_content_stream(
             model=self._model,
             contents=messages,

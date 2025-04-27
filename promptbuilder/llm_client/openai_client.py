@@ -1,12 +1,13 @@
 import os
-from typing import Awaitable, AsyncIterator, Iterator
+import json
+from typing import AsyncIterator, Iterator
 
 from pydantic import BaseModel
 from openai import OpenAI, AsyncOpenAI, Stream, AsyncStream
 from openai.types.responses import ResponseStreamEvent
 
 from promptbuilder.llm_client.base_client import BaseLLMClient, BaseLLMClientAsync, ResultType
-from promptbuilder.llm_client.messages import Response, Content, Candidate, UsageMetadata, Part, ThinkingConfig
+from promptbuilder.llm_client.messages import Response, Content, Candidate, UsageMetadata, Part, ThinkingConfig, Tool, ToolConfig, FunctionCall
 from promptbuilder.llm_client.base_configs import DecoratorConfigs, base_decorator_configs, base_default_max_tokens_configs
 
 
@@ -53,10 +54,12 @@ class OpenaiLLMClient(BaseLLMClient):
         self,
         messages: list[Content],
         result_type: ResultType = None,
+        *,
         thinking_config: ThinkingConfig = ThinkingConfig(),
         system_message: str | None = None,
         max_tokens: int | None = None,
-        **kwargs,
+        tools: list[Tool] | None = None,
+        tool_config: ToolConfig = ToolConfig(),
     ) -> Response:
         openai_messages: list[dict[str, str]] = []
         if system_message is not None:
@@ -78,11 +81,54 @@ class OpenaiLLMClient(BaseLLMClient):
         
         if thinking_config.include_thoughts:
             openai_kwargs["reasoning"] = {"effort": "medium"}
+            # openai_kwargs["reasoning"]["summary"] = "auto"
+        
+        if tools is not None:
+            openai_kwargs["parallel_tool_calls"] = True
+            
+            openai_tools = []
+            for tool in tools:
+                for func_decl in tool.function_declarations:
+                    parameters = func_decl.parameters
+                    if parameters is not None:
+                        parameters = parameters.model_dump(exclude_none=True)
+                        parameters["additionalProperties"] = False
+                    else:
+                        parameters = {"type": "object", "properties": {}, "required": [], "additionalProperties": False}
+                    openai_tools.append({
+                        "type": "function",
+                        "name": func_decl.name,
+                        "description": func_decl.description,
+                        "strict": True,
+                        "parameters": parameters,
+                    })
+            openai_kwargs["tools"] = openai_tools
+            
+            tool_choice_mode = "AUTO"
+            if tool_config.function_calling_config is not None:
+                if tool_config.function_calling_config.mode is not None:
+                    tool_choice_mode = tool_config.function_calling_config.mode
+            if tool_choice_mode == "NONE":
+                openai_kwargs["tool_choice"] = "none"
+            elif tool_choice_mode == "AUTO":
+                openai_kwargs["tool_choice"] = "auto"
+            elif tool_choice_mode == "ANY":
+                openai_kwargs["tool_choice"] = "required"
         
         if result_type is None:
             response = self.client.responses.create(**openai_kwargs)
             
-            parts: list[Part] = [Part(text=response.output_text)]
+            parts: list[Part] = []
+            for output_item in response.output:
+                if output_item.type == "message":
+                    for content in output_item.content:
+                        parts.append(Part(text=content.text))
+                elif output_item.type == "reasoning":
+                    for summary in output_item.summary:
+                        parts.append(Part(text=summary.text, thought=True))
+                elif output_item.type == "function_call":
+                    parts.append(Part(function_call=FunctionCall(args=json.loads(output_item.arguments), name=output_item.name)))
+            
             return Response(
                 candidates=[Candidate(content=Content(parts=parts, role="model"))],
                 usage_metadata=UsageMetadata(
@@ -94,8 +140,20 @@ class OpenaiLLMClient(BaseLLMClient):
         elif result_type == "json":
             response = self.client.responses.create(**openai_kwargs)
             
-            parts: list[Part] = [Part(text=response.output_text)]
-            parsed = self._as_json(response.output_text)
+            parts: list[Part] = []
+            text = ""
+            for output_item in response.output:
+                if output_item.type == "message":
+                    for content in output_item.content:
+                        parts.append(Part(text=content.text))
+                        text += content.text + "\n"
+                elif output_item.type == "reasoning":
+                    for summary in output_item.summary:
+                        parts.append(Part(text=summary.text, thought=True))
+                elif output_item.type == "function_call":
+                    parts.append(Part(function_call=FunctionCall(args=json.loads(output_item.arguments), name=output_item.name)))
+            parsed = self._as_json(text)
+            
             return Response(
                 candidates=[Candidate(content=Content(parts=parts, role="model"))],
                 usage_metadata=UsageMetadata(
@@ -107,8 +165,19 @@ class OpenaiLLMClient(BaseLLMClient):
             )
         elif isinstance(result_type, type(BaseModel)):
             response = self.client.responses.parse(**openai_kwargs, text_format=result_type)
-            parts: list[Part] = [Part(text=response.output_text)]
+            
+            parts: list[Part] = []
+            for output_item in response.output:
+                if output_item.type == "message":
+                    for content in output_item.content:
+                        parts.append(Part(text=content.text))
+                elif output_item.type == "reasoning":
+                    for summary in output_item.summary:
+                        parts.append(Part(text=summary.text, thought=True))
+                elif output_item.type == "function_call":
+                    parts.append(Part(function_call=FunctionCall(args=json.loads(output_item.arguments), name=output_item.name)))
             parsed = response.output_parsed
+            
             return Response(
                 candidates=[Candidate(content=Content(parts=parts, role="model"))],
                 usage_metadata=UsageMetadata(
@@ -122,9 +191,9 @@ class OpenaiLLMClient(BaseLLMClient):
     def create_stream(
         self,
         messages: list[Content],
+        *,
         system_message: str | None = None,
         max_tokens: int | None = None,
-        **kwargs,
     ) -> Iterator[Response]:
         openai_messages: list[dict[str, str]] = []
         if system_message is not None:
@@ -193,7 +262,8 @@ class OpenaiLLMClientAsync(BaseLLMClientAsync):
         thinking_config: ThinkingConfig = ThinkingConfig(),
         system_message: str | None = None,
         max_tokens: int | None = None,
-        **kwargs,
+        tools: list[Tool] | None = None,
+        tool_config: ToolConfig = ToolConfig(),
     ) -> Response:
         openai_messages: list[dict[str, str]] = []
         if system_message is not None:
@@ -215,11 +285,54 @@ class OpenaiLLMClientAsync(BaseLLMClientAsync):
         
         if thinking_config.include_thoughts:
             openai_kwargs["reasoning"] = {"effort": "medium"}
+            openai_kwargs["reasoning"]["summary"] = "auto"
+        
+        if tools is not None:
+            openai_kwargs["parallel_tool_calls"] = True
+            
+            openai_tools = []
+            for tool in tools:
+                for func_decl in tool.function_declarations:
+                    parameters = func_decl.parameters
+                    if parameters is not None:
+                        parameters = parameters.model_dump(exclude_none=True)
+                        parameters["additionalProperties"] = False
+                    else:
+                        parameters = {"type": "object", "properties": {}, "required": [], "additionalProperties": False}
+                    openai_tools.append({
+                        "type": "function",
+                        "name": func_decl.name,
+                        "description": func_decl.description,
+                        "strict": True,
+                        "parameters": parameters,
+                    })
+            openai_kwargs["tools"] = openai_tools
+            
+            tool_choice_mode = "AUTO"
+            if tool_config.function_calling_config is not None:
+                if tool_config.function_calling_config.mode is not None:
+                    tool_choice_mode = tool_config.function_calling_config.mode
+            if tool_choice_mode == "NONE":
+                openai_kwargs["tool_choice"] = "none"
+            elif tool_choice_mode == "AUTO":
+                openai_kwargs["tool_choice"] = "auto"
+            elif tool_choice_mode == "ANY":
+                openai_kwargs["tool_choice"] = "required"
         
         if result_type is None:
             response = await self.client.responses.create(**openai_kwargs)
             
-            parts: list[Part] = [Part(text=response.output_text)]
+            parts: list[Part] = []
+            for output_item in response.output:
+                if output_item.type == "message":
+                    for content in output_item.content:
+                        parts.append(Part(text=content.text))
+                elif output_item.type == "reasoning":
+                    for summary in output_item.summary:
+                        parts.append(Part(text=summary.text, thought=True))
+                elif output_item.type == "function_call":
+                    parts.append(Part(function_call=FunctionCall(args=json.loads(output_item.arguments), name=output_item.name)))
+            
             return Response(
                 candidates=[Candidate(content=Content(parts=parts, role="model"))],
                 usage_metadata=UsageMetadata(
@@ -231,8 +344,20 @@ class OpenaiLLMClientAsync(BaseLLMClientAsync):
         elif result_type == "json":
             response = await self.client.responses.create(**openai_kwargs)
             
-            parts: list[Part] = [Part(text=response.output_text)]
-            parsed = self._as_json(response.output_text)
+            parts: list[Part] = []
+            text = ""
+            for output_item in response.output:
+                if output_item.type == "message":
+                    for content in output_item.content:
+                        parts.append(Part(text=content.text))
+                        text += content.text + "\n"
+                elif output_item.type == "reasoning":
+                    for summary in output_item.summary:
+                        parts.append(Part(text=summary.text, thought=True))
+                elif output_item.type == "function_call":
+                    parts.append(Part(function_call=FunctionCall(args=json.loads(output_item.arguments), name=output_item.name)))
+            parsed = self._as_json(text)
+            
             return Response(
                 candidates=[Candidate(content=Content(parts=parts, role="model"))],
                 usage_metadata=UsageMetadata(
@@ -244,8 +369,19 @@ class OpenaiLLMClientAsync(BaseLLMClientAsync):
             )
         elif isinstance(result_type, type(BaseModel)):
             response = await self.client.responses.parse(**openai_kwargs, text_format=result_type)
-            parts: list[Part] = [Part(text=response.output_text)]
+            
+            parts: list[Part] = []
+            for output_item in response.output:
+                if output_item.type == "message":
+                    for content in output_item.content:
+                        parts.append(Part(text=content.text))
+                elif output_item.type == "reasoning":
+                    for summary in output_item.summary:
+                        parts.append(Part(text=summary.text, thought=True))
+                elif output_item.type == "function_call":
+                    parts.append(Part(function_call=FunctionCall(args=json.loads(output_item.arguments), name=output_item.name)))
             parsed = response.output_parsed
+            
             return Response(
                 candidates=[Candidate(content=Content(parts=parts, role="model"))],
                 usage_metadata=UsageMetadata(
@@ -259,10 +395,10 @@ class OpenaiLLMClientAsync(BaseLLMClientAsync):
     async def create_stream(
         self,
         messages: list[Content],
+        *,
         system_message: str | None = None,
         max_tokens: int | None = None,
-        **kwargs,
-    ) -> Awaitable[AsyncIterator[Response]]:
+    ) -> AsyncIterator[Response]:
         openai_messages: list[dict[str, str]] = []
         if system_message is not None:
             openai_messages.append({"role": "developer", "content": system_message})

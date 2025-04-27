@@ -1,12 +1,12 @@
 import os
-from typing import Awaitable, AsyncIterator, Iterator
+from typing import AsyncIterator, Iterator
 
 from pydantic import BaseModel
 from anthropic import Anthropic, AsyncAnthropic, Stream, AsyncStream
 from anthropic.types import RawMessageStreamEvent
 
 from promptbuilder.llm_client.base_client import BaseLLMClient, BaseLLMClientAsync, ResultType
-from promptbuilder.llm_client.messages import Response, Content, Candidate, UsageMetadata, Part, ThinkingConfig
+from promptbuilder.llm_client.messages import Response, Content, Candidate, UsageMetadata, Part, ThinkingConfig, Tool, ToolConfig, FunctionCall
 from promptbuilder.llm_client.base_configs import DecoratorConfigs, base_decorator_configs, base_default_max_tokens_configs
 from promptbuilder.prompt_builder import schema_to_ts
 
@@ -54,10 +54,12 @@ class AnthropicLLMClient(BaseLLMClient):
         self,
         messages: list[Content],
         result_type: ResultType = None,
+        *,
         thinking_config: ThinkingConfig = ThinkingConfig(),
         system_message: str | None = None,
         max_tokens: int | None = None,
-        **kwargs,
+        tools: list[Tool] | None = None,
+        tool_config: ToolConfig = ToolConfig(),
     ) -> Response:
         anthropic_messages: list[dict[str, str]] = []
         for message in messages:
@@ -88,6 +90,28 @@ class AnthropicLLMClient(BaseLLMClient):
         if system_message is not None:
             anthropic_kwargs["system"] = system_message
         
+        if tools is not None:
+            anthropic_tools = []
+            for tool in tools:
+                for func_decl in tool.function_declarations:
+                    schema = func_decl.parameters
+                    if schema is not None:
+                        schema = schema.model_dump(exclude_none=True)
+                    else:
+                        schema = {"type": "object", "properties": {}}
+                    anthropic_tools.append({
+                        "name": func_decl.name,
+                        "description": func_decl.description,
+                        "input_schema": schema,
+                    })
+            anthropic_kwargs["tools"] = anthropic_tools
+            
+            tool_choice_mode = "AUTO"
+            if tool_config.function_calling_config is not None:
+                if tool_config.function_calling_config.mode is not None:
+                    tool_choice_mode = tool_config.function_calling_config.mode
+            anthropic_kwargs["tool_choice"] = {"type": tool_choice_mode.lower()}
+        
         if result_type is None:
             response = self.client.messages.create(**anthropic_kwargs)
             
@@ -97,6 +121,8 @@ class AnthropicLLMClient(BaseLLMClient):
                     parts.append(Part(text=content.thinking, thought=True))
                 elif content.type == "text":
                     parts.append(Part(text=content.text))
+                elif content.type == "tool_use":
+                    parts.append(Part(function_call=FunctionCall(args=content.input, name=content.name)))
             
             return Response(
                 candidates=[Candidate(content=Content(parts=parts, role="model"))],
@@ -116,6 +142,8 @@ class AnthropicLLMClient(BaseLLMClient):
                 elif content.type == "text":
                     text += content.text + "\n"
                     parts.append(Part(text=content.text))
+                elif content.type == "tool_use":
+                    parts.append(Part(function_call=FunctionCall(args=content.input, name=content.name)))
             parsed = self._as_json(text)
             
             return Response(
@@ -142,6 +170,8 @@ class AnthropicLLMClient(BaseLLMClient):
                 elif content.type == "text":
                     text += content.text + "\n"
                     parts.append(Part(text=content.text))
+                elif content.type == "tool_use":
+                    parts.append(Part(function_call=FunctionCall(args=content.input, name=content.name)))
             parsed = self._as_json(text)
             parsed_pydantic = result_type.model_construct(**parsed)
             
@@ -158,9 +188,9 @@ class AnthropicLLMClient(BaseLLMClient):
     def create_stream(
         self,
         messages: list[Content],
+        *,
         system_message: str | None = None,
         max_tokens: int | None = None,
-        **kwargs,
     ) -> Iterator[Response]:
         anthropic_messages: list[dict[str, str]] = []
         for message in messages:
@@ -229,10 +259,12 @@ class AnthropicLLMClientAsync(BaseLLMClientAsync):
         self,
         messages: list[Content],
         result_type: ResultType = None,
+        *,
         thinking_config: ThinkingConfig = ThinkingConfig(),
         system_message: str | None = None,
         max_tokens: int | None = None,
-        **kwargs,
+        tools: list[Tool] | None = None,
+        tool_config: ToolConfig = ToolConfig(),
     ) -> Response:
         anthropic_messages: list[dict[str, str]] = []
         for message in messages:
@@ -263,6 +295,28 @@ class AnthropicLLMClientAsync(BaseLLMClientAsync):
         if system_message is not None:
             anthropic_kwargs["system"] = system_message
         
+        if tools is not None:
+            anthropic_tools = []
+            for tool in tools:
+                for func_decl in tool.function_declarations:
+                    schema = func_decl.parameters
+                    if schema is not None:
+                        schema = schema.model_dump(exclude_none=True)
+                    else:
+                        schema = {"type": "object", "properties": {}}
+                    anthropic_tools.append({
+                        "name": func_decl.name,
+                        "description": func_decl.description,
+                        "input_schema": schema,
+                    })
+            anthropic_kwargs["tools"] = anthropic_tools
+            
+            tool_choice_mode = "AUTO"
+            if tool_config.function_calling_config is not None:
+                if tool_config.function_calling_config.mode is not None:
+                    tool_choice_mode = tool_config.function_calling_config.mode
+            anthropic_kwargs["tool_choice"] = {"type": tool_choice_mode.lower()}
+        
         if result_type is None:
             response = await self.client.messages.create(**anthropic_kwargs)
             
@@ -272,6 +326,8 @@ class AnthropicLLMClientAsync(BaseLLMClientAsync):
                     parts.append(Part(text=content.thinking, thought=True))
                 elif content.type == "text":
                     parts.append(Part(text=content.text))
+                elif content.type == "tool_use":
+                    parts.append(Part(function_call=FunctionCall(args=content.input, name=content.name)))
             
             return Response(
                 candidates=[Candidate(content=Content(parts=parts, role="model"))],
@@ -291,6 +347,8 @@ class AnthropicLLMClientAsync(BaseLLMClientAsync):
                 elif content.type == "text":
                     text += content.text + "\n"
                     parts.append(Part(text=content.text))
+                elif content.type == "tool_use":
+                    parts.append(Part(function_call=FunctionCall(args=content.input, name=content.name)))
             parsed = self._as_json(text)
             
             return Response(
@@ -317,6 +375,8 @@ class AnthropicLLMClientAsync(BaseLLMClientAsync):
                 elif content.type == "text":
                     text += content.text + "\n"
                     parts.append(Part(text=content.text))
+                elif content.type == "tool_use":
+                    parts.append(Part(function_call=FunctionCall(args=content.input, name=content.name)))
             parsed = self._as_json(text)
             parsed_pydantic = result_type.model_construct(**parsed)
             
@@ -333,10 +393,10 @@ class AnthropicLLMClientAsync(BaseLLMClientAsync):
     async def create_stream(
         self,
         messages: list[Content],
+        *,
         system_message: str | None = None,
         max_tokens: int | None = None,
-        **kwargs,
-    ) -> Awaitable[AsyncIterator[Response]]:
+    ) -> AsyncIterator[Response]:
         anthropic_messages: list[dict[str, str]] = []
         for message in messages:
             if message.role == "user":

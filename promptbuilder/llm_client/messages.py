@@ -1,5 +1,5 @@
 import logging
-from typing import Optional, Any, Type, Callable, Literal, TypeVar, Self
+from typing import Optional, Any, Callable, Literal, TypeVar, Self
 
 from pydantic import BaseModel, model_validator
 
@@ -9,6 +9,7 @@ logger = logging.getLogger(__name__)
 type MessagesDict = list[dict[str, str]]
 type Role = Literal["user", "model"]
 type Json = list | dict
+type JsonType = Literal["string", "number", "integer", "boolean", "array", "object"]
 PydanticStructure = TypeVar("PydanticStructure", bound=BaseModel)
 
 
@@ -141,7 +142,7 @@ class Schema(BaseModel):
     properties: Optional[dict[str, "Schema"]] = None
     property_ordering: Optional[list[str]] = None
     required: Optional[list[str]] = None
-    type: Optional[Type] = None
+    type: Optional[JsonType] = None
 
 class FunctionDeclaration(BaseModel):
     response: Optional[Schema] = None
@@ -152,3 +153,10 @@ class FunctionDeclaration(BaseModel):
 class Tool(BaseModel):
     function_declarations: Optional[list[FunctionDeclaration]] = None
     callable: Optional[Callable] = None
+
+class FunctionCallingConfig(BaseModel):
+    mode: Optional[Literal["AUTO", "ANY", "NONE"]] = None
+    allowed_function_names: Optional[list[str]] = None
+
+class ToolConfig(BaseModel):
+    function_calling_config: Optional[FunctionCallingConfig] = None
