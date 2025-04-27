@@ -48,8 +48,6 @@ class Part(BaseModel):
     def as_str(self) -> str:
         if self.text is not None:
             return self.text
-        if self.thought is not None:
-            return self.thought
         return ""
 
 class Content(BaseModel):

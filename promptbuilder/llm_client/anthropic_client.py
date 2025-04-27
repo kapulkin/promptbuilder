@@ -92,18 +92,20 @@ class AnthropicLLMClient(BaseLLMClient):
         
         if tools is not None:
             anthropic_tools = []
+            allowed_function_names = tool_config.function_calling_config.allowed_function_names
             for tool in tools:
                 for func_decl in tool.function_declarations:
-                    schema = func_decl.parameters
-                    if schema is not None:
-                        schema = schema.model_dump(exclude_none=True)
-                    else:
-                        schema = {"type": "object", "properties": {}}
-                    anthropic_tools.append({
-                        "name": func_decl.name,
-                        "description": func_decl.description,
-                        "input_schema": schema,
-                    })
+                    if allowed_function_names is None or func_decl.name in allowed_function_names:
+                        schema = func_decl.parameters
+                        if schema is not None:
+                            schema = schema.model_dump(exclude_none=True)
+                        else:
+                            schema = {"type": "object", "properties": {}}
+                        anthropic_tools.append({
+                            "name": func_decl.name,
+                            "description": func_decl.description,
+                            "input_schema": schema,
+                        })
             anthropic_kwargs["tools"] = anthropic_tools
             
             tool_choice_mode = "AUTO"
@@ -297,18 +299,20 @@ class AnthropicLLMClientAsync(BaseLLMClientAsync):
         
         if tools is not None:
             anthropic_tools = []
+            allowed_function_names = tool_config.function_calling_config.allowed_function_names
             for tool in tools:
                 for func_decl in tool.function_declarations:
-                    schema = func_decl.parameters
-                    if schema is not None:
-                        schema = schema.model_dump(exclude_none=True)
-                    else:
-                        schema = {"type": "object", "properties": {}}
-                    anthropic_tools.append({
-                        "name": func_decl.name,
-                        "description": func_decl.description,
-                        "input_schema": schema,
-                    })
+                    if allowed_function_names is None or func_decl.name in allowed_function_names:
+                        schema = func_decl.parameters
+                        if schema is not None:
+                            schema = schema.model_dump(exclude_none=True)
+                        else:
+                            schema = {"type": "object", "properties": {}}
+                        anthropic_tools.append({
+                            "name": func_decl.name,
+                            "description": func_decl.description,
+                            "input_schema": schema,
+                        })
             anthropic_kwargs["tools"] = anthropic_tools
             
             tool_choice_mode = "AUTO"

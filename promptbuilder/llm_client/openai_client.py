@@ -87,21 +87,23 @@ class OpenaiLLMClient(BaseLLMClient):
             openai_kwargs["parallel_tool_calls"] = True
             
             openai_tools = []
+            allowed_function_names = tool_config.function_calling_config.allowed_function_names
             for tool in tools:
                 for func_decl in tool.function_declarations:
-                    parameters = func_decl.parameters
-                    if parameters is not None:
-                        parameters = parameters.model_dump(exclude_none=True)
-                        parameters["additionalProperties"] = False
-                    else:
-                        parameters = {"type": "object", "properties": {}, "required": [], "additionalProperties": False}
-                    openai_tools.append({
-                        "type": "function",
-                        "name": func_decl.name,
-                        "description": func_decl.description,
-                        "strict": True,
-                        "parameters": parameters,
-                    })
+                    if allowed_function_names is None or func_decl.name in allowed_function_names:
+                        parameters = func_decl.parameters
+                        if parameters is not None:
+                            parameters = parameters.model_dump(exclude_none=True)
+                            parameters["additionalProperties"] = False
+                        else:
+                            parameters = {"type": "object", "properties": {}, "required": [], "additionalProperties": False}
+                        openai_tools.append({
+                            "type": "function",
+                            "name": func_decl.name,
+                            "description": func_decl.description,
+                            "strict": True,
+                            "parameters": parameters,
+                        })
             openai_kwargs["tools"] = openai_tools
             
             tool_choice_mode = "AUTO"
@@ -291,21 +293,23 @@ class OpenaiLLMClientAsync(BaseLLMClientAsync):
             openai_kwargs["parallel_tool_calls"] = True
             
             openai_tools = []
+            allowed_function_names = tool_config.function_calling_config.allowed_function_names
             for tool in tools:
                 for func_decl in tool.function_declarations:
-                    parameters = func_decl.parameters
-                    if parameters is not None:
-                        parameters = parameters.model_dump(exclude_none=True)
-                        parameters["additionalProperties"] = False
-                    else:
-                        parameters = {"type": "object", "properties": {}, "required": [], "additionalProperties": False}
-                    openai_tools.append({
-                        "type": "function",
-                        "name": func_decl.name,
-                        "description": func_decl.description,
-                        "strict": True,
-                        "parameters": parameters,
-                    })
+                    if allowed_function_names is None or func_decl.name in allowed_function_names:
+                        parameters = func_decl.parameters
+                        if parameters is not None:
+                            parameters = parameters.model_dump(exclude_none=True)
+                            parameters["additionalProperties"] = False
+                        else:
+                            parameters = {"type": "object", "properties": {}, "required": [], "additionalProperties": False}
+                        openai_tools.append({
+                            "type": "function",
+                            "name": func_decl.name,
+                            "description": func_decl.description,
+                            "strict": True,
+                            "parameters": parameters,
+                        })
             openai_kwargs["tools"] = openai_tools
             
             tool_choice_mode = "AUTO"
