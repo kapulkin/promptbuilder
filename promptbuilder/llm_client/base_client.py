@@ -1,5 +1,7 @@
 import re
 import json
+import os
+import hashlib
 from typing import Iterator, AsyncIterator, Literal, overload
 
 from promptbuilder.llm_client.messages import Response, Content, Part, Tool, ToolConfig, FunctionCall, FunctionCallingConfig, Json, ThinkingConfig, PydanticStructure
@@ -419,3 +421,32 @@ class BaseLLMClientAsync(utils.InheritDecoratorsMixin):
             tools=tools,
             tool_choice_mode=tool_choice_mode,
         )
+
+class CachedLLMClient(BaseLLMClient):
+    def __init__(self, llm_client: BaseLLMClient, cache_dir: str = 'data/llm_cache'):
+        self.llm_client = llm_client
+        self.cache_dir = cache_dir
+        self.cache = {}
+    
+    def create(self, messages: list[Content], **kwargs) -> Response:
+        messages_dump = [message.model_dump() for message in messages]
+        key = hashlib.sha256(
+            json.dumps((self.llm_client.model, messages_dump)).encode()
+        ).hexdigest()
+        cache_path = os.path.join(self.cache_dir, f"{key}.json")
+        if os.path.exists(cache_path):
+            try:
+                with open(cache_path, 'rt') as f:
+                    cache_data = json.load(f)
+                    if cache_data['model'] == self.llm_client.model and json.dumps(cache_data['request']) == json.dumps(messages_dump):
+                        return Response(**cache_data['response'])
+                    else:
+                        logger.debug(f"Cache mismatch for {key}")
+            except (json.JSONDecodeError, KeyError) as e:
+                logger.warning(f"Invalid cache file {cache_path}: {str(e)}")
+                # Continue to make API call if cache is invalid
+        
+        response = self.llm_client.create(messages, **kwargs)
+        with open(cache_path, 'wt') as f:
+            json.dump({'model': self.llm_client.model, 'request': messages_dump, 'response': response.model_dump()}, f, indent=4)
+        return response

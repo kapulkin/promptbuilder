@@ -35,7 +35,7 @@ class Agent(Generic[MessageType, ContextType]):
             f"{message.role}: {message.parts[0].text}"
             for message in messages
         ])
-        return Content(parts=[Part(text=text)], role=BaseLLMClient.user_tag)
+        return Content(parts=[Part(text=text)], role="user")
 
     def _formatted_messages(self, messages: list[Content]) -> list[Content]:
         if self.message_format == MessageFormat.ONE_MESSAGE:

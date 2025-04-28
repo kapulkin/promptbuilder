@@ -14,7 +14,7 @@ PydanticStructure = TypeVar("PydanticStructure", bound=BaseModel)
 
 
 class Message(BaseModel):
-    role: Role
+    role: str
     content: str
 
 class Choice(BaseModel):

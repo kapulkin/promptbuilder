@@ -78,7 +78,7 @@ class AiSuiteLLMClient(BaseLLMClient):
     ) -> Response:
         aisuite_messages: list[dict[str, str]] = []
         if system_message is not None:
-            messages.append({"role": "system", "content": system_message})
+            aisuite_messages.append({"role": "system", "content": system_message})
         for message in messages:
             if message.role == "user":
                 aisuite_messages.append({"role": "user", "content": message.as_str()})
@@ -264,7 +264,7 @@ class AiSuiteLLMClientAsync(BaseLLMClientAsync):
     ) -> Response:
         aisuite_messages: list[dict[str, str]] = []
         if system_message is not None:
-            messages.append({"role": "system", "content": system_message})
+            aisuite_messages.append({"role": "system", "content": system_message})
         for message in messages:
             if message.role == "user":
                 aisuite_messages.append({"role": "user", "content": message.as_str()})
