@@ -141,6 +141,8 @@ class BaseLLMClient(utils.InheritDecoratorsMixin):
         else:
             return response.parsed
     
+    @utils.retry_cls
+    @utils.rpm_limit_cls
     def create_stream(self, messages: list[Content], *, system_message: str | None = None, max_tokens: int | None = None) -> Iterator[Response]:
         raise NotImplementedError
     
@@ -347,6 +349,8 @@ class BaseLLMClientAsync(utils.InheritDecoratorsMixin):
         else:
             return response.parsed
     
+    @utils.retry_cls_async
+    @utils.rpm_limit_cls_async
     async def create_stream(self, messages: list[Content], *, system_message: str | None = None, max_tokens: int | None = None) -> AsyncIterator[Response]:
         raise NotImplementedError
     
