@@ -2,10 +2,11 @@ from pydantic import BaseModel
 from promptbuilder.llm_client.messages import Content
 from typing import Any, TypeVar, Generic
 
+
 MessageType = TypeVar("MessageType", bound=Any)
 
 class DialogHistory(Generic[MessageType]):
-    def last_messages(self) -> list[Content]:
+    def last_messages(self, n: int = 0) -> list[Content]:
         raise NotImplementedError("Subclasses must implement this method")
 
     def add_message(self, message: MessageType):
@@ -16,7 +17,7 @@ class DialogHistory(Generic[MessageType]):
 
 class InMemoryDialogHistory(DialogHistory[Content]):
     def __init__(self):
-        self.messages = []
+        self.messages: list[Content] = []
 
     def last_messages(self, n: int = 0) -> list[Content]:
         return self.messages[-n:]

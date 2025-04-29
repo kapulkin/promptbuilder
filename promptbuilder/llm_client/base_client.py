@@ -2,11 +2,14 @@ import re
 import json
 import os
 import hashlib
+import logging
 from typing import Iterator, AsyncIterator, Literal, overload
 
 from promptbuilder.llm_client.messages import Response, Content, Part, Tool, ToolConfig, FunctionCall, FunctionCallingConfig, Json, ThinkingConfig, PydanticStructure
 import promptbuilder.llm_client.utils as utils
 
+
+logger = logging.getLogger(__name__)
 
 type ResultType = Literal["json"] | type[PydanticStructure] | None
 

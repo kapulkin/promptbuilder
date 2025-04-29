@@ -6,7 +6,7 @@ from pydantic import BaseModel, Field
 from promptbuilder.agent.agent import AgentRouter, MessageFormat
 from promptbuilder.agent.context import Context, InMemoryDialogHistory
 from promptbuilder.llm_client.messages import Content, Part
-from promptbuilder.llm_client import LLMClient
+from promptbuilder.llm_client import BaseLLMClient, get_client
 import os
 import dotenv
 
@@ -22,7 +22,7 @@ class TodoListContext(Context[InMemoryDialogHistory]):
         super().__init__(dialog_history=InMemoryDialogHistory())
 
 class TodoListAgent(AgentRouter[InMemoryDialogHistory, TodoListContext]):
-    def __init__(self, llm_client: LLMClient, context: TodoListContext, **kwargs):
+    def __init__(self, llm_client: BaseLLMClient, context: TodoListContext, **kwargs):
         super().__init__(llm_client=llm_client, context=context, **kwargs)
 
     def description(self) -> str:
@@ -45,7 +45,7 @@ Please help users manage their todo list by using the appropriate tools."""
 
 
 dotenv.load_dotenv()
-agent = TodoListAgent(llm_client=LLMClient(), context=TodoListContext(), message_format=MessageFormat.ONE_MESSAGE)
+agent = TodoListAgent(llm_client=get_client("google:gemini-2.0-flash"), context=TodoListContext(), message_format=MessageFormat.ONE_MESSAGE)
 
 @agent.route({"description": "Description of the todo item", "quantity": "Quantity of items (default is 1)"})
 async def add_todo(description: str, quantity: int = 1) -> str:
@@ -79,7 +79,7 @@ async def main():
         "Delete item 1",
         "Remove one apple from item 1",
         "Delete all of item 1",
-        "Show my todo list"
+        "Show my todo list",
     ]
     
     for msg in messages:
