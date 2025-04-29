@@ -87,7 +87,9 @@ class OpenaiLLMClient(BaseLLMClient):
             openai_kwargs["parallel_tool_calls"] = True
             
             openai_tools = []
-            allowed_function_names = tool_config.function_calling_config.allowed_function_names
+            allowed_function_names = None
+            if tool_config.function_calling_config is not None:
+                allowed_function_names = tool_config.function_calling_config.allowed_function_names
             for tool in tools:
                 for func_decl in tool.function_declarations:
                     if allowed_function_names is None or func_decl.name in allowed_function_names:
@@ -293,7 +295,9 @@ class OpenaiLLMClientAsync(BaseLLMClientAsync):
             openai_kwargs["parallel_tool_calls"] = True
             
             openai_tools = []
-            allowed_function_names = tool_config.function_calling_config.allowed_function_names
+            allowed_function_names = None
+            if tool_config.function_calling_config is not None:
+                allowed_function_names = tool_config.function_calling_config.allowed_function_names
             for tool in tools:
                 for func_decl in tool.function_declarations:
                     if allowed_function_names is None or func_decl.name in allowed_function_names:
