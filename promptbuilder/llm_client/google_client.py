@@ -49,7 +49,10 @@ class GoogleLLMClient(BaseLLMClient):
             tools=tools,
             tool_config=tool_config,
         )
-        if thinking_config.include_thoughts:
+        
+        if not thinking_config.include_thoughts:
+            thinking_config = ThinkingConfig(include_thoughts=False, thinking_budget=0)
+        if "2.5" in self._model:
             config.thinking_config = thinking_config
         
         if result_type is None:
@@ -84,7 +87,11 @@ class GoogleLLMClient(BaseLLMClient):
     ) -> Iterator[Response]:
         if max_tokens is None:
             max_tokens = self.default_max_tokens
-        config = types.GenerateContentConfig(system_instruction=system_message, max_output_tokens=max_tokens)
+        config = types.GenerateContentConfig(
+            system_instruction=system_message,
+            max_output_tokens=max_tokens,
+            thinking_config=ThinkingConfig(include_thoughts=False, thinking_budget=0),
+        )
         response = self.client.models.generate_content_stream(
             model=self._model,
             contents=messages,
@@ -133,7 +140,10 @@ class GoogleLLMClientAsync(BaseLLMClientAsync):
             tools=tools,
             tool_config=tool_config,
         )
-        if thinking_config.include_thoughts:
+        
+        if not thinking_config.include_thoughts:
+            thinking_config = ThinkingConfig(include_thoughts=False, thinking_budget=0)
+        if "2.5" in self._model:
             config.thinking_config = thinking_config
         
         if result_type is None:
@@ -168,7 +178,11 @@ class GoogleLLMClientAsync(BaseLLMClientAsync):
     ) -> AsyncIterator[Response]:
         if max_tokens is None:
             max_tokens = self.default_max_tokens
-        config = types.GenerateContentConfig(system_instruction=system_message, max_output_tokens=max_tokens)
+        config = types.GenerateContentConfig(
+            system_instruction=system_message,
+            max_output_tokens=max_tokens,
+            thinking_config=ThinkingConfig(include_thoughts=False, thinking_budget=0),
+        )
         response = await self.client.aio.models.generate_content_stream(
             model=self._model,
             contents=messages,
