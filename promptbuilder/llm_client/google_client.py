@@ -52,7 +52,7 @@ class GoogleLLMClient(BaseLLMClient):
         
         if not thinking_config.include_thoughts:
             thinking_config = ThinkingConfig(include_thoughts=False, thinking_budget=0)
-        if "2.5" in self._model:
+        if thinking_config.include_thoughts or "gemini-2.5" in self._model:
             config.thinking_config = thinking_config
         
         if result_type is None:
@@ -143,7 +143,7 @@ class GoogleLLMClientAsync(BaseLLMClientAsync):
         
         if not thinking_config.include_thoughts:
             thinking_config = ThinkingConfig(include_thoughts=False, thinking_budget=0)
-        if "2.5" in self._model:
+        if thinking_config.include_thoughts or "gemini-2.5" in self._model:
             config.thinking_config = thinking_config
         
         if result_type is None:
