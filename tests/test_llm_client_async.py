@@ -155,9 +155,9 @@ async def test_from_text_structured(llm_client_json):
 
 @pytest.mark.asyncio
 async def test_with_system_message(llm_client):
-    response = await llm_client.with_system_message(
-        system_message="You are a helpful assistant",
-        input="Test message"
+    response = await llm_client.create_value(
+        messages=[Content(parts=[Part(text="Test message")], role="user")],
+        system_message="You are a helpful assistant"
     )
     assert isinstance(response, str)
     assert response == "This is a test response"

@@ -122,8 +122,8 @@ class AiSuiteLLMClient(BaseLLMClient):
             
             parts: list[Part] = []
             for choice in response.choices:
-                if choice.message.tool_calls is not None:
-                    tool_calls = choice.message.tool_calls
+                tool_calls = getattr(choice.message, "tool_calls", None)
+                if tool_calls is not None:
                     if not isinstance(tool_calls, list):
                         tool_calls = [tool_calls]
                     for tool_call in tool_calls:
@@ -144,8 +144,8 @@ class AiSuiteLLMClient(BaseLLMClient):
             parts: list[Part] = []
             text = ""
             for choice in response.choices:
-                if choice.message.tool_calls is not None:
-                    tool_calls = choice.message.tool_calls
+                tool_calls = getattr(choice.message, "tool_calls", None)
+                if tool_calls is not None:
                     if not isinstance(tool_calls, list):
                         tool_calls = [tool_calls]
                     for tool_call in tool_calls:
@@ -173,8 +173,8 @@ class AiSuiteLLMClient(BaseLLMClient):
             parts: list[Part] = []
             text = ""
             for choice in response.choices:
-                if choice.message.tool_calls is not None:
-                    tool_calls = choice.message.tool_calls
+                tool_calls = getattr(choice.message, "tool_calls", None)
+                if tool_calls is not None:
                     if not isinstance(tool_calls, list):
                         tool_calls = [tool_calls]
                     for tool_call in tool_calls:
@@ -308,8 +308,8 @@ class AiSuiteLLMClientAsync(BaseLLMClientAsync):
             
             parts: list[Part] = []
             for choice in response.choices:
-                if choice.message.tool_calls is not None:
-                    tool_calls = choice.message.tool_calls
+                tool_calls = getattr(choice.message, "tool_calls", None)
+                if tool_calls is not None:
                     if not isinstance(tool_calls, list):
                         tool_calls = [tool_calls]
                     for tool_call in tool_calls:
@@ -330,8 +330,8 @@ class AiSuiteLLMClientAsync(BaseLLMClientAsync):
             parts: list[Part] = []
             text = ""
             for choice in response.choices:
-                if choice.message.tool_calls is not None:
-                    tool_calls = choice.message.tool_calls
+                tool_calls = getattr(choice.message, "tool_calls", None)
+                if tool_calls is not None:
                     if not isinstance(tool_calls, list):
                         tool_calls = [tool_calls]
                     for tool_call in tool_calls:
@@ -359,8 +359,8 @@ class AiSuiteLLMClientAsync(BaseLLMClientAsync):
             parts: list[Part] = []
             text = ""
             for choice in response.choices:
-                if choice.message.tool_calls is not None:
-                    tool_calls = choice.message.tool_calls
+                tool_calls = getattr(choice.message, "tool_calls", None)
+                if tool_calls is not None:
                     if not isinstance(tool_calls, list):
                         tool_calls = [tool_calls]
                     for tool_call in tool_calls:

@@ -58,13 +58,14 @@ class Agent(Generic[MessageType, ContextType]):
 
 
 class AgentRouter(Agent[MessageType, ContextType]):
-    def __init__(self, llm_client: BaseLLMClient | BaseLLMClientAsync, context: ContextType, message_format: MessageFormat = MessageFormat.MESSAGES_LIST):
+    def __init__(self, llm_client: BaseLLMClient | BaseLLMClientAsync, context: ContextType, description: str | None = None, message_format: MessageFormat = MessageFormat.MESSAGES_LIST):
         super().__init__(llm_client, context, message_format)
+        self._description = description
         self.tr_names: list[str] = []
         self.tools: dict[str, CallableTool[..., Response]] = {}
         self.routes: dict[str, CallableTool[..., RouteResponse]] = {}
         self.last_used_tr_name = None
-    
+
     async def __call__(self, user_message: MessageType, tr_choice_mode: Literal["ANY", "AUTO", "FIRST"] = "FIRST", trs_to_exclude: set[str] = set(), **kwargs: Any):
         if len(trs_to_exclude) == 0:
             self.context.dialog_history.add_message(user_message)
@@ -122,7 +123,9 @@ class AgentRouter(Agent[MessageType, ContextType]):
                     raise ValueError(f"Tool/route {tr_name} not found")
     
     def description(self) -> str:
-        raise NotImplementedError("Description is not implemented")
+        if self._description is None:
+            raise NotImplementedError("Description is not implemented")
+        return self._description
 
     def system_message(self, callable_trs: list[CallableTool] = [], **kwargs: Any) -> str:
         builder = PromptBuilder() \
