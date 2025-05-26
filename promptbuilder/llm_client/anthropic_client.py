@@ -40,8 +40,6 @@ class AnthropicLLMClient(BaseLLMClient):
     ):
         if decorator_configs is None:
             decorator_configs = base_decorator_configs["anthropic:" + model]
-        if default_max_tokens is None:
-            default_max_tokens = base_default_max_tokens_configs["anthropic:" + model]
         super().__init__(decorator_configs=decorator_configs, default_max_tokens=default_max_tokens)
         self.client = Anthropic(api_key=api_key)
         self._model = model
