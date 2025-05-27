@@ -7,6 +7,7 @@ from typing import Iterator, AsyncIterator, Literal, overload
 
 from promptbuilder.llm_client.messages import Response, Content, Part, Tool, ToolConfig, FunctionCall, FunctionCallingConfig, Json, ThinkingConfig, PydanticStructure
 import promptbuilder.llm_client.utils as utils
+from promptbuilder.llm_client.config import GLOBAL_CONFIG
 
 
 logger = logging.getLogger(__name__)
@@ -15,14 +16,27 @@ type ResultType = Literal["json"] | type[PydanticStructure] | None
 
 
 class BaseLLMClient(utils.InheritDecoratorsMixin):
-    def __init__(self, decorator_configs: utils.DecoratorConfigs = utils.DecoratorConfigs(), default_max_tokens: int = 8192, **kwargs):
+    provider: str
+    
+    def __init__(self, model: str, decorator_configs: utils.DecoratorConfigs | None = None, default_max_tokens: int | None = None, **kwargs):
+        self.model = model
+        
+        if decorator_configs is None:
+            if self.client_name in GLOBAL_CONFIG.default_decorator_configs:
+                decorator_configs = GLOBAL_CONFIG.default_decorator_configs[self.client_name]
+            else:
+                decorator_configs = utils.DecoratorConfigs()
         self._decorator_configs = decorator_configs
+        
+        if default_max_tokens is None:
+            if self.client_name in GLOBAL_CONFIG.default_max_tokens:
+                default_max_tokens = GLOBAL_CONFIG.default_max_tokens[self.client_name]
         self.default_max_tokens = default_max_tokens
     
     @property
-    def model(self) -> str:
-        """Return the model identifier used by this LLM client."""
-        raise NotImplementedError
+    def client_name(self) -> str:
+        """Return the client identifier"""
+        return self.provider + ":" + self.model
     
     def _as_json(self, text: str) -> Json:
         # Remove markdown code block formatting if present
@@ -223,14 +237,27 @@ class BaseLLMClient(utils.InheritDecoratorsMixin):
 
 
 class BaseLLMClientAsync(utils.InheritDecoratorsMixin):
-    def __init__(self, decorator_configs: utils.DecoratorConfigs = utils.DecoratorConfigs(), default_max_tokens: int = 8192, **kwargs):
+    provider: str
+    
+    def __init__(self, model: str, decorator_configs: utils.DecoratorConfigs | None = None, default_max_tokens: int | None = None, **kwargs):
+        self.model = model
+        
+        if decorator_configs is None:
+            if self.client_name in GLOBAL_CONFIG.default_decorator_configs:
+                decorator_configs = GLOBAL_CONFIG.default_decorator_configs[self.client_name]
+            else:
+                decorator_configs = utils.DecoratorConfigs()
         self._decorator_configs = decorator_configs
+        
+        if default_max_tokens is None:
+            if self.client_name in GLOBAL_CONFIG.default_max_tokens:
+                default_max_tokens = GLOBAL_CONFIG.default_max_tokens[self.client_name]
         self.default_max_tokens = default_max_tokens
-
+    
     @property
-    def model(self) -> str:
-        """Return the model identifier used by this LLM client."""
-        raise NotImplementedError
+    def client_name(self) -> str:
+        """Return the model identifier"""
+        return self.provider + ":" + self.model
     
     def _as_json(self, text: str) -> Json:
         # Remove markdown code block formatting if present
@@ -430,7 +457,7 @@ class BaseLLMClientAsync(utils.InheritDecoratorsMixin):
         )
 
 class CachedLLMClient(BaseLLMClient):
-    def __init__(self, llm_client: BaseLLMClient, cache_dir: str = 'data/llm_cache'):
+    def __init__(self, llm_client: BaseLLMClient, cache_dir: str = "data/llm_cache"):
         self.llm_client = llm_client
         self.cache_dir = cache_dir
         self.cache = {}
@@ -438,14 +465,14 @@ class CachedLLMClient(BaseLLMClient):
     def create(self, messages: list[Content], **kwargs) -> Response:
         messages_dump = [message.model_dump() for message in messages]
         key = hashlib.sha256(
-            json.dumps((self.llm_client.model, messages_dump)).encode()
+            json.dumps((self.llm_client.client_name, messages_dump)).encode()
         ).hexdigest()
         cache_path = os.path.join(self.cache_dir, f"{key}.json")
         if os.path.exists(cache_path):
             try:
-                with open(cache_path, 'rt') as f:
+                with open(cache_path, "rt") as f:
                     cache_data = json.load(f)
-                    if cache_data['model'] == self.llm_client.model and json.dumps(cache_data['request']) == json.dumps(messages_dump):
+                    if cache_data["client"] == self.llm_client.client_name and json.dumps(cache_data["request"]) == json.dumps(messages_dump):
                         return Response(**cache_data['response'])
                     else:
                         logger.debug(f"Cache mismatch for {key}")
@@ -454,6 +481,6 @@ class CachedLLMClient(BaseLLMClient):
                 # Continue to make API call if cache is invalid
         
         response = self.llm_client.create(messages, **kwargs)
-        with open(cache_path, 'wt') as f:
-            json.dump({'model': self.llm_client.model, 'request': messages_dump, 'response': response.model_dump()}, f, indent=4)
+        with open(cache_path, "wt") as f:
+            json.dump({"client": self.llm_client.client_name, "request": messages_dump, "response": response.model_dump()}, f, indent=4)
         return response

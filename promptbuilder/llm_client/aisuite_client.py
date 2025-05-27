@@ -5,35 +5,27 @@ from pydantic import BaseModel
 
 from promptbuilder.llm_client.base_client import BaseLLMClient, BaseLLMClientAsync, ResultType
 from promptbuilder.llm_client.messages import Response, Content, Candidate, UsageMetadata, Part, ThinkingConfig, Tool, ToolConfig, FunctionCall
-from promptbuilder.llm_client.base_configs import DecoratorConfigs, base_decorator_configs, base_default_max_tokens_configs
+from promptbuilder.llm_client.config import DecoratorConfigs
 from promptbuilder.prompt_builder import schema_to_ts
 
 
 class AiSuiteLLMClient(BaseLLMClient):
+    provider: str = ""
     user_tag: str = "user"
     assistant_tag: str = "model"
     
     def __init__(
         self,
-        model: str,
+        client_name: str,
         api_key: str,
         decorator_configs: DecoratorConfigs | None = None,
         default_max_tokens: int | None = None,
         **kwargs,
     ):
-        if decorator_configs is None:
-            decorator_configs = base_decorator_configs[model]
-        if default_max_tokens is None:
-            default_max_tokens = base_default_max_tokens_configs[model]
-        super().__init__(decorator_configs=decorator_configs, default_max_tokens=default_max_tokens)
+        self.provider, model = client_name.split(":")
+        super().__init__(model, decorator_configs=decorator_configs, default_max_tokens=default_max_tokens)
         
-        self._provider = model.split(':')[0]
-        self._model = model
-        self.client = aisuite_async.Client(provider_configs={self._provider: {"api_key": api_key}})
-    
-    @property
-    def model(self) -> str:
-        return self._model
+        self.client = aisuite_async.Client(provider_configs={self.provider: {"api_key": api_key}})
 
     def _internal_role(self, role: str) -> str:
         return "user" if role == self.user_tag else "assistant"
@@ -86,7 +78,7 @@ class AiSuiteLLMClient(BaseLLMClient):
                 aisuite_messages.append({"role": "assistant", "content": message.as_str()})
 
         aisuite_kwargs = {
-            "model": self._model,
+            "model": self.client_name,
             "messages": aisuite_messages,
         }
         
@@ -196,30 +188,22 @@ class AiSuiteLLMClient(BaseLLMClient):
 
 
 class AiSuiteLLMClientAsync(BaseLLMClientAsync):
+    provider: str = ""
     user_tag: str = "user"
     assistant_tag: str = "model"
     
     def __init__(
         self,
-        model: str,
+        client_name: str,
         api_key: str,
         decorator_configs: DecoratorConfigs | None = None,
         default_max_tokens: int | None = None,
         **kwargs,
     ):
-        if decorator_configs is None:
-            decorator_configs = base_decorator_configs[model]
-        if default_max_tokens is None:
-            default_max_tokens = base_default_max_tokens_configs[model]
-        super().__init__(decorator_configs=decorator_configs, default_max_tokens=default_max_tokens)
+        self.provider, model_name = client_name.split(":")
+        super().__init__(model_name, decorator_configs=decorator_configs, default_max_tokens=default_max_tokens)
         
-        self._provider = model.split(':')[0]
-        self._model = model
-        self.client = aisuite_async.AsyncClient(provider_configs={self._provider: {"api_key": api_key}})
-    
-    @property
-    def model(self) -> str:
-        return self._model
+        self.client = aisuite_async.AsyncClient(provider_configs={self.provider: {"api_key": api_key}})
 
     def _internal_role(self, role: str) -> str:
         return "user" if role == self.user_tag else "assistant"
@@ -272,7 +256,7 @@ class AiSuiteLLMClientAsync(BaseLLMClientAsync):
                 aisuite_messages.append({"role": "assistant", "content": message.as_str()})
 
         aisuite_kwargs = {
-            "model": self._model,
+            "model": self.client_name,
             "messages": aisuite_messages,
         }
         

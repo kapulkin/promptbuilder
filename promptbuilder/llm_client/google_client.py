@@ -6,10 +6,12 @@ from google.genai import Client, types
 
 from promptbuilder.llm_client.base_client import BaseLLMClient, BaseLLMClientAsync, ResultType
 from promptbuilder.llm_client.messages import Response, Content, ThinkingConfig, Tool, ToolConfig
-from promptbuilder.llm_client.base_configs import DecoratorConfigs, base_decorator_configs, base_default_max_tokens_configs
+from promptbuilder.llm_client.config import DecoratorConfigs
 
 
 class GoogleLLMClient(BaseLLMClient):
+    provider: str = "google"
+    
     def __init__(
         self,
         model: str,
@@ -18,17 +20,8 @@ class GoogleLLMClient(BaseLLMClient):
         default_max_tokens: int | None = None,
         **kwargs,
     ):
-        if decorator_configs is None:
-            decorator_configs = base_decorator_configs["google:" + model]
-        if default_max_tokens is None:
-            default_max_tokens = base_default_max_tokens_configs["google:" + model]
-        super().__init__(decorator_configs=decorator_configs, default_max_tokens=default_max_tokens)
+        super().__init__(model, decorator_configs=decorator_configs, default_max_tokens=default_max_tokens)
         self.client = Client(api_key=api_key)
-        self._model = model
-    
-    @property
-    def model(self) -> str:
-        return "google:" + self._model
     
     def create(
         self,
@@ -52,18 +45,18 @@ class GoogleLLMClient(BaseLLMClient):
         
         if not thinking_config.include_thoughts:
             thinking_config = ThinkingConfig(include_thoughts=False, thinking_budget=0)
-        if thinking_config.include_thoughts or "gemini-2.5" in self._model:
+        if thinking_config.include_thoughts or "gemini-2.5" in self.model:
             config.thinking_config = thinking_config
         
         if result_type is None:
             return self.client.models.generate_content(
-                model=self._model,
+                model=self.model,
                 contents=messages,
                 config=config,
             )
         elif result_type == "json":
             response = self.client.models.generate_content(
-                model=self._model,
+                model=self.model,
                 contents=messages,
                 config=config,
             )
@@ -73,7 +66,7 @@ class GoogleLLMClient(BaseLLMClient):
             config.response_mime_type = "application/json"
             config.response_schema = result_type
             return self.client.models.generate_content(
-                model=self._model,
+                model=self.model,
                 contents=messages,
                 config=config,
             )
@@ -93,7 +86,7 @@ class GoogleLLMClient(BaseLLMClient):
             thinking_config=ThinkingConfig(include_thoughts=False, thinking_budget=0),
         )
         response = self.client.models.generate_content_stream(
-            model=self._model,
+            model=self.model,
             contents=messages,
             config=config,
         )
@@ -101,6 +94,8 @@ class GoogleLLMClient(BaseLLMClient):
 
 
 class GoogleLLMClientAsync(BaseLLMClientAsync):
+    provider: str = "google"
+    
     def __init__(
         self,
         model: str,
@@ -109,17 +104,8 @@ class GoogleLLMClientAsync(BaseLLMClientAsync):
         default_max_tokens: int | None = None,
         **kwargs,
     ):
-        if decorator_configs is None:
-            decorator_configs = base_decorator_configs["google:" + model]
-        if default_max_tokens is None:
-            default_max_tokens = base_default_max_tokens_configs["google:" + model]
-        super().__init__(decorator_configs=decorator_configs, default_max_tokens=default_max_tokens)
+        super().__init__(model, decorator_configs=decorator_configs, default_max_tokens=default_max_tokens)
         self.client = Client(api_key=api_key)
-        self._model = model
-    
-    @property
-    def model(self) -> str:
-        return "google:" + self._model
     
     async def create(
         self,
@@ -143,18 +129,18 @@ class GoogleLLMClientAsync(BaseLLMClientAsync):
         
         if not thinking_config.include_thoughts:
             thinking_config = ThinkingConfig(include_thoughts=False, thinking_budget=0)
-        if thinking_config.include_thoughts or "gemini-2.5" in self._model:
+        if thinking_config.include_thoughts or "gemini-2.5" in self.model:
             config.thinking_config = thinking_config
         
         if result_type is None:
             return await self.client.aio.models.generate_content(
-                model=self._model,
+                model=self.model,
                 contents=messages,
                 config=config,
             )
         elif result_type == "json":
             response = await self.client.aio.models.generate_content(
-                model=self._model,
+                model=self.model,
                 contents=messages,
                 config=config,
             )
@@ -164,7 +150,7 @@ class GoogleLLMClientAsync(BaseLLMClientAsync):
             config.response_mime_type = "application/json"
             config.response_schema = result_type
             return await self.client.aio.models.generate_content(
-                model=self._model,
+                model=self.model,
                 contents=messages,
                 config=config,
             )
@@ -184,7 +170,7 @@ class GoogleLLMClientAsync(BaseLLMClientAsync):
             thinking_config=ThinkingConfig(include_thoughts=False, thinking_budget=0),
         )
         response = await self.client.aio.models.generate_content_stream(
-            model=self._model,
+            model=self.model,
             contents=messages,
             config=config,
         )
