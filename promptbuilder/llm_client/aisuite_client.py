@@ -114,8 +114,8 @@ class AiSuiteLLMClient(BaseLLMClient):
             
             parts: list[Part] = []
             for choice in response.choices:
-                if choice.message.tool_calls is not None:
-                    tool_calls = choice.message.tool_calls
+                tool_calls = getattr(choice.message, "tool_calls", None)
+                if tool_calls is not None:
                     if not isinstance(tool_calls, list):
                         tool_calls = [tool_calls]
                     for tool_call in tool_calls:
@@ -136,8 +136,8 @@ class AiSuiteLLMClient(BaseLLMClient):
             parts: list[Part] = []
             text = ""
             for choice in response.choices:
-                if choice.message.tool_calls is not None:
-                    tool_calls = choice.message.tool_calls
+                tool_calls = getattr(choice.message, "tool_calls", None)
+                if tool_calls is not None:
                     if not isinstance(tool_calls, list):
                         tool_calls = [tool_calls]
                     for tool_call in tool_calls:
@@ -165,8 +165,8 @@ class AiSuiteLLMClient(BaseLLMClient):
             parts: list[Part] = []
             text = ""
             for choice in response.choices:
-                if choice.message.tool_calls is not None:
-                    tool_calls = choice.message.tool_calls
+                tool_calls = getattr(choice.message, "tool_calls", None)
+                if tool_calls is not None:
                     if not isinstance(tool_calls, list):
                         tool_calls = [tool_calls]
                     for tool_call in tool_calls:
@@ -202,7 +202,6 @@ class AiSuiteLLMClientAsync(BaseLLMClientAsync):
     ):
         self.provider, model_name = client_name.split(":")
         super().__init__(model_name, decorator_configs=decorator_configs, default_max_tokens=default_max_tokens)
-        
         self.client = aisuite_async.AsyncClient(provider_configs={self.provider: {"api_key": api_key}})
 
     def _internal_role(self, role: str) -> str:
@@ -292,8 +291,8 @@ class AiSuiteLLMClientAsync(BaseLLMClientAsync):
             
             parts: list[Part] = []
             for choice in response.choices:
-                if choice.message.tool_calls is not None:
-                    tool_calls = choice.message.tool_calls
+                tool_calls = getattr(choice.message, "tool_calls", None)
+                if tool_calls is not None:
                     if not isinstance(tool_calls, list):
                         tool_calls = [tool_calls]
                     for tool_call in tool_calls:
@@ -314,8 +313,8 @@ class AiSuiteLLMClientAsync(BaseLLMClientAsync):
             parts: list[Part] = []
             text = ""
             for choice in response.choices:
-                if choice.message.tool_calls is not None:
-                    tool_calls = choice.message.tool_calls
+                tool_calls = getattr(choice.message, "tool_calls", None)
+                if tool_calls is not None:
                     if not isinstance(tool_calls, list):
                         tool_calls = [tool_calls]
                     for tool_call in tool_calls:
@@ -343,8 +342,8 @@ class AiSuiteLLMClientAsync(BaseLLMClientAsync):
             parts: list[Part] = []
             text = ""
             for choice in response.choices:
-                if choice.message.tool_calls is not None:
-                    tool_calls = choice.message.tool_calls
+                tool_calls = getattr(choice.message, "tool_calls", None)
+                if tool_calls is not None:
                     if not isinstance(tool_calls, list):
                         tool_calls = [tool_calls]
                     for tool_call in tool_calls:

@@ -1,5 +1,6 @@
 import pytest
 from unittest.mock import Mock, patch, AsyncMock
+from promptbuilder.llm_client import CachedLLMClientAsync
 from promptbuilder.llm_client import get_client, get_async_client
 from promptbuilder.llm_client.aisuite_client import AiSuiteLLMClientAsync
 from promptbuilder.llm_client.messages import Completion, Choice, Message, Usage, Response, Candidate, Content, Part, UsageMetadata
@@ -155,9 +156,9 @@ async def test_from_text_structured(llm_client_json):
 
 @pytest.mark.asyncio
 async def test_with_system_message(llm_client):
-    response = await llm_client.with_system_message(
-        system_message="You are a helpful assistant",
-        input="Test message"
+    response = await llm_client.create_value(
+        messages=[Content(parts=[Part(text="Test message")], role="user")],
+        system_message="You are a helpful assistant"
     )
     assert isinstance(response, str)
     assert response == "This is a test response"
@@ -172,3 +173,38 @@ async def test_create_with_system_message(llm_client):
     assert isinstance(response, Response)
     assert len(response.candidates) == 1
     assert response.candidates[0].content.parts[0].text == "This is a test response" 
+
+@pytest.fixture
+def temp_cache_dir():
+    # Create a temporary directory for cache
+    temp_dir = tempfile.mkdtemp()
+    yield temp_dir
+    # Clean up after tests
+    shutil.rmtree(temp_dir)
+
+
+@pytest.fixture
+def cached_llm_client(llm_client, temp_cache_dir):
+    return CachedLLMClientAsync(llm_client, cache_dir=temp_cache_dir)
+
+@pytest.mark.asyncio
+async def test_cached_llm_client_first_call(cached_llm_client, mock_aisuite_client):
+    """Test that first call to create() makes an actual API call and caches result"""
+    messages = [Content(parts=[Part(text="Test message")], role="user")]
+    
+    # First call should make an API request
+    response = await cached_llm_client.create(messages)
+    
+    # Verify the completion
+    assert isinstance(response, Response)
+    assert len(response.candidates) == 1
+    assert response.candidates[0].content.parts[0].text == "This is a test response"
+    
+    # Verify that the mock was called once
+    mock_client = mock_aisuite_client.return_value
+    mock_client.chat.completions.create.assert_called_once()
+    
+    # Verify cache file was created
+    cache_files = os.listdir(cached_llm_client.cache_dir)
+    assert len(cache_files) == 1
+    assert cache_files[0].endswith('.json')

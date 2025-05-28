@@ -39,7 +39,7 @@ def get_client(client_name: str, api_key: str | None = None, decorator_configs: 
                 raise ValueError(f"You should directly provide api_key for this provider: {provider}")
             else:
                 client = AiSuiteLLMClient(client_name, api_key, decorator_configs=decorator_configs, default_max_tokens=default_max_tokens)
-        
+                
         _memory[client_name] = client
         return _memory[client_name]
     else:
