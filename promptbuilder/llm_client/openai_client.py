@@ -8,7 +8,7 @@ from openai.types.responses import ResponseStreamEvent
 
 from promptbuilder.llm_client.base_client import BaseLLMClient, BaseLLMClientAsync, ResultType
 from promptbuilder.llm_client.messages import Response, Content, Candidate, UsageMetadata, Part, ThinkingConfig, Tool, ToolConfig, FunctionCall
-from promptbuilder.llm_client.base_configs import DecoratorConfigs, base_decorator_configs, base_default_max_tokens_configs
+from promptbuilder.llm_client.config import DecoratorConfigs
 
 
 class OpenaiStreamIterator:
@@ -30,6 +30,8 @@ class OpenaiStreamIterator:
 
 
 class OpenaiLLMClient(BaseLLMClient):
+    provider = "openai"
+    
     def __init__(
         self,
         model: str,
@@ -38,15 +40,8 @@ class OpenaiLLMClient(BaseLLMClient):
         default_max_tokens: int | None = None,
         **kwargs,
     ):
-        if decorator_configs is None:
-            decorator_configs = base_decorator_configs["openai:" + model]
-        super().__init__(decorator_configs=decorator_configs, default_max_tokens=default_max_tokens)
+        super().__init__(model, decorator_configs=decorator_configs, default_max_tokens=default_max_tokens)
         self.client = OpenAI(api_key=api_key)
-        self._model = model
-    
-    @property
-    def model(self) -> str:
-        return "openai:" + self._model
     
     def create(
         self,
@@ -72,7 +67,7 @@ class OpenaiLLMClient(BaseLLMClient):
             max_tokens = self.default_max_tokens
         
         openai_kwargs = {
-            "model": self._model,
+            "model": self.model,
             "max_output_tokens": max_tokens,
             "input": openai_messages,
         }
@@ -210,7 +205,7 @@ class OpenaiLLMClient(BaseLLMClient):
             max_tokens = self.default_max_tokens
         
         openai_kwargs = {
-            "model": self._model,
+            "model": self.model,
             "max_output_tokens": max_tokens,
             "input": openai_messages,
         }
@@ -237,6 +232,8 @@ class OpenaiStreamIteratorAsync:
 
 
 class OpenaiLLMClientAsync(BaseLLMClientAsync):
+    provider = "openai"
+    
     def __init__(
         self,
         model: str,
@@ -245,17 +242,8 @@ class OpenaiLLMClientAsync(BaseLLMClientAsync):
         default_max_tokens: int | None = None,
         **kwargs,
     ):
-        if decorator_configs is None:
-            decorator_configs = base_decorator_configs["openai:" + model]
-        if default_max_tokens is None:
-            default_max_tokens = base_default_max_tokens_configs["openai:" + model]
-        super().__init__(decorator_configs=decorator_configs, default_max_tokens=default_max_tokens)
+        super().__init__(model, decorator_configs=decorator_configs, default_max_tokens=default_max_tokens)
         self.client = AsyncOpenAI(api_key=api_key)
-        self._model = model
-    
-    @property
-    def model(self) -> str:
-        return "openai:" + self._model
     
     async def create(
         self,
@@ -280,7 +268,7 @@ class OpenaiLLMClientAsync(BaseLLMClientAsync):
             max_tokens = self.default_max_tokens
         
         openai_kwargs = {
-            "model": self._model,
+            "model": self.model,
             "max_output_tokens": max_tokens,
             "input": openai_messages,
         }
@@ -418,7 +406,7 @@ class OpenaiLLMClientAsync(BaseLLMClientAsync):
             max_tokens = self.default_max_tokens
         
         openai_kwargs = {
-            "model": self._model,
+            "model": self.model,
             "max_output_tokens": max_tokens,
             "input": openai_messages,
         }

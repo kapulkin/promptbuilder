@@ -7,8 +7,57 @@ from anthropic.types import RawMessageStreamEvent
 
 from promptbuilder.llm_client.base_client import BaseLLMClient, BaseLLMClientAsync, ResultType
 from promptbuilder.llm_client.messages import Response, Content, Candidate, UsageMetadata, Part, ThinkingConfig, Tool, ToolConfig, FunctionCall
-from promptbuilder.llm_client.base_configs import DecoratorConfigs, base_decorator_configs, base_default_max_tokens_configs
+from promptbuilder.llm_client.config import DecoratorConfigs
 from promptbuilder.prompt_builder import schema_to_ts
+
+
+class DefaultMaxTokensStrategy:
+    def for_create(self, model: str) -> int:
+        raise NotImplementedError
+    
+    def for_create_stream(self, model: str) -> int:
+        raise NotImplementedError
+
+# The Anthropic API requires an explicit integer value for the 'max_tokens' parameter. 
+# Unlike other APIs where 'None' might imply using the model's maximum, Anthropic's API does not permit this.
+# Furthermore, the official Anthropic Python library itself has different
+# internal default token limits depending on whether the request is for a streaming or non-streaming response.
+class AnthropicDefaultMaxTokensStrategy(DefaultMaxTokensStrategy):
+    def for_create(self, model: str) -> int:
+        if "claude-3-haiku" in model:
+            return 4096
+        elif "claude-3-opus" in model:
+            return 4096
+        elif "claude-3-5-haiku" in model:
+            return 8192
+        elif "claude-3-5-sonnet" in model:
+            return 8192
+        elif "claude-3-7-sonnet" in model:
+            return 8192
+        elif "claude-sonnet-4" in model:
+            return 8192
+        elif "claude-opus-4" in model:
+            return 8192
+        else:
+            return 8192
+    
+    def for_create_stream(self, model: str) -> int:
+        if "claude-3-haiku" in model:
+            return 4096
+        elif "claude-3-opus" in model:
+            return 4096
+        elif "claude-3-5-haiku" in model:
+            return 8192
+        elif "claude-3-5-sonnet" in model:
+            return 8192
+        elif "claude-3-7-sonnet" in model:
+            return 64000
+        elif "claude-sonnet-4" in model:
+            return 64000
+        elif "claude-opus-4" in model:
+            return 32000
+        else:
+            return 32000
 
 
 class AnthropicStreamIterator:
@@ -30,23 +79,20 @@ class AnthropicStreamIterator:
 
 
 class AnthropicLLMClient(BaseLLMClient):
+    provider: str = "anthropic"
+    
     def __init__(
         self,
         model: str,
         api_key: str = os.getenv("ANTHROPIC_API_KEY"),
         decorator_configs: DecoratorConfigs | None = None,
         default_max_tokens: int | None = None,
+        default_max_tokens_strategy: DefaultMaxTokensStrategy = AnthropicDefaultMaxTokensStrategy(),
         **kwargs,
     ):
-        if decorator_configs is None:
-            decorator_configs = base_decorator_configs["anthropic:" + model]
-        super().__init__(decorator_configs=decorator_configs, default_max_tokens=default_max_tokens)
+        super().__init__(model, decorator_configs=decorator_configs, default_max_tokens=default_max_tokens)
         self.client = Anthropic(api_key=api_key)
-        self._model = model
-    
-    @property
-    def model(self) -> str:
-        return "anthropic:" + self._model
+        self.default_max_tokens_strategy = default_max_tokens_strategy
     
     def create(
         self,
@@ -67,10 +113,13 @@ class AnthropicLLMClient(BaseLLMClient):
                 anthropic_messages.append({"role": "assistant", "content": message.as_str()})
         
         if max_tokens is None:
-            max_tokens = self.default_max_tokens
+            if self.default_max_tokens is None:
+                max_tokens = self.default_max_tokens_strategy.for_create(self.model)
+            else:
+                max_tokens = self.default_max_tokens
         
         anthropic_kwargs = {
-            "model": self._model,
+            "model": self.model,
             "max_tokens": max_tokens,
             "messages": anthropic_messages,
         }
@@ -202,10 +251,13 @@ class AnthropicLLMClient(BaseLLMClient):
                 anthropic_messages.append({"role": "assistant", "content": message.as_str()})
         
         if max_tokens is None:
-            max_tokens = self.default_max_tokens
+            if self.default_max_tokens is None:
+                max_tokens = self.default_max_tokens_strategy.for_create_stream(self.model)
+            else:
+                max_tokens = self.default_max_tokens
         
         anthropic_kwargs = {
-            "model": self._model,
+            "model": self.model,
             "max_tokens": max_tokens,
             "messages": anthropic_messages,
             "stream": True,
@@ -237,25 +289,20 @@ class AnthropicStreamIteratorAsync:
 
 
 class AnthropicLLMClientAsync(BaseLLMClientAsync):
+    provider: str = "anthropic"
+    
     def __init__(
         self,
         model: str,
         api_key: str = os.getenv("ANTHROPIC_API_KEY"),
         decorator_configs: DecoratorConfigs | None = None,
         default_max_tokens: int | None = None,
+        default_max_tokens_strategy: DefaultMaxTokensStrategy = AnthropicDefaultMaxTokensStrategy(),
         **kwargs,
     ):
-        if decorator_configs is None:
-            decorator_configs = base_decorator_configs["anthropic:" + model]
-        if default_max_tokens is None:
-            default_max_tokens = base_default_max_tokens_configs["anthropic:" + model]
-        super().__init__(decorator_configs=decorator_configs, default_max_tokens=default_max_tokens)
+        super().__init__(model, decorator_configs=decorator_configs, default_max_tokens=default_max_tokens)
         self.client = AsyncAnthropic(api_key=api_key)
-        self._model = model
-    
-    @property
-    def model(self) -> str:
-        return "anthropic:" + self._model
+        self.default_max_tokens_strategy = default_max_tokens_strategy
     
     async def create(
         self,
@@ -276,10 +323,13 @@ class AnthropicLLMClientAsync(BaseLLMClientAsync):
                 anthropic_messages.append({"role": "assistant", "content": message.as_str()})
         
         if max_tokens is None:
-            max_tokens = self.default_max_tokens
+            if self.default_max_tokens is None:
+                max_tokens = self.default_max_tokens_strategy.for_create(self.model)
+            else:
+                max_tokens = self.default_max_tokens
         
         anthropic_kwargs = {
-            "model": self._model,
+            "model": self.model,
             "max_tokens": max_tokens,
             "messages": anthropic_messages,
         }
@@ -411,10 +461,13 @@ class AnthropicLLMClientAsync(BaseLLMClientAsync):
                 anthropic_messages.append({"role": "assistant", "content": message.as_str()})
         
         if max_tokens is None:
-            max_tokens = self.default_max_tokens
+            if self.default_max_tokens is None:
+                max_tokens = self.default_max_tokens_strategy.for_create_stream(self.model)
+            else:
+                max_tokens = self.default_max_tokens
         
         anthropic_kwargs = {
-            "model": self._model,
+            "model": self.model,
             "max_tokens": max_tokens,
             "messages": anthropic_messages,
             "stream": True,
