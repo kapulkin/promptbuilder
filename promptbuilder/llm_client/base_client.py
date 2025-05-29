@@ -22,20 +22,20 @@ class BaseLLMClient(utils.InheritDecoratorsMixin):
         self.model = model
         
         if decorator_configs is None:
-            if self.client_name in GLOBAL_CONFIG.default_decorator_configs:
-                decorator_configs = GLOBAL_CONFIG.default_decorator_configs[self.client_name]
+            if self.full_model_name in GLOBAL_CONFIG.default_decorator_configs:
+                decorator_configs = GLOBAL_CONFIG.default_decorator_configs[self.full_model_name]
             else:
                 decorator_configs = utils.DecoratorConfigs()
         self._decorator_configs = decorator_configs
         
         if default_max_tokens is None:
-            if self.client_name in GLOBAL_CONFIG.default_max_tokens:
-                default_max_tokens = GLOBAL_CONFIG.default_max_tokens[self.client_name]
+            if self.full_model_name in GLOBAL_CONFIG.default_max_tokens:
+                default_max_tokens = GLOBAL_CONFIG.default_max_tokens[self.full_model_name]
         self.default_max_tokens = default_max_tokens
     
     @property
-    def client_name(self) -> str:
-        """Return the client identifier"""
+    def full_model_name(self) -> str:
+        """Return the model identifier"""
         return self.provider + ":" + self.model
     
     def _as_json(self, text: str) -> Json:
@@ -243,19 +243,19 @@ class BaseLLMClientAsync(utils.InheritDecoratorsMixin):
         self.model = model
         
         if decorator_configs is None:
-            if self.client_name in GLOBAL_CONFIG.default_decorator_configs:
-                decorator_configs = GLOBAL_CONFIG.default_decorator_configs[self.client_name]
+            if self.full_model_name in GLOBAL_CONFIG.default_decorator_configs:
+                decorator_configs = GLOBAL_CONFIG.default_decorator_configs[self.full_model_name]
             else:
                 decorator_configs = utils.DecoratorConfigs()
         self._decorator_configs = decorator_configs
         
         if default_max_tokens is None:
-            if self.client_name in GLOBAL_CONFIG.default_max_tokens:
-                default_max_tokens = GLOBAL_CONFIG.default_max_tokens[self.client_name]
+            if self.full_model_name in GLOBAL_CONFIG.default_max_tokens:
+                default_max_tokens = GLOBAL_CONFIG.default_max_tokens[self.full_model_name]
         self.default_max_tokens = default_max_tokens
     
     @property
-    def client_name(self) -> str:
+    def full_model_name(self) -> str:
         """Return the model identifier"""
         return self.provider + ":" + self.model
     
@@ -467,21 +467,21 @@ class CachedLLMClient(BaseLLMClient):
         if response is not None:
             return response
         response = self.llm_client.create(messages, **kwargs)
-        CachedLLMClient.save_cache(cache_path, self.llm_client.model, messages_dump, response)
+        CachedLLMClient.save_cache(cache_path, self.llm_client.full_model_name, messages_dump, response)
         return response
 
     @staticmethod
     def create_cached(llm_client: BaseLLMClient, cache_dir: str, messages: list[Content], **kwargs) -> tuple[Response | None, list[dict], str]:
         messages_dump = [message.model_dump() for message in messages]
         key = hashlib.sha256(
-            json.dumps((llm_client.client_name, messages_dump)).encode()
+            json.dumps((llm_client.full_model_name, messages_dump)).encode()
         ).hexdigest()
         cache_path = os.path.join(cache_dir, f"{key}.json")
         if os.path.exists(cache_path):
             try:
                 with open(cache_path, "rt") as f:
                     cache_data = json.load(f)
-                    if cache_data["client_name"] == llm_client.client_name and json.dumps(cache_data["request"]) == json.dumps(messages_dump):
+                    if cache_data["full_model_name"] == llm_client.full_model_name and json.dumps(cache_data["request"]) == json.dumps(messages_dump):
                         return Response(**cache_data["response"]), messages_dump, cache_path
                     else:
                         logger.debug(f"Cache mismatch for {key}")
@@ -491,9 +491,9 @@ class CachedLLMClient(BaseLLMClient):
         return None, messages_dump, cache_path
     
     @staticmethod
-    def save_cache(cache_path: str, client_name: str, messages_dump: list[dict], response: Response):
+    def save_cache(cache_path: str, full_model_name: str, messages_dump: list[dict], response: Response):
         with open(cache_path, 'wt') as f:
-            json.dump({"client_name": client_name, "request": messages_dump, "response": response.model_dump()}, f, indent=4)
+            json.dump({"full_model_name": full_model_name, "request": messages_dump, "response": response.model_dump()}, f, indent=4)
 
 
 class CachedLLMClientAsync(BaseLLMClientAsync):
@@ -506,6 +506,6 @@ class CachedLLMClientAsync(BaseLLMClientAsync):
         if response is not None:
             return response        
         response = await self.llm_client.create(messages, **kwargs)
-        CachedLLMClient.save_cache(cache_path, self.llm_client.model, messages_dump, response)
+        CachedLLMClient.save_cache(cache_path, self.llm_client.full_model_name, messages_dump, response)
         return response
 

@@ -34,7 +34,7 @@ def mock_aisuite_client():
 
 @pytest.fixture
 def llm_client(mock_aisuite_client):
-    return AiSuiteLLMClient(model="test:model", api_key="test-key")
+    return AiSuiteLLMClient(full_model_name="test:model", api_key="test-key")
 
 def test_create_output_format(llm_client):
     messages = [Content(parts=[Part(text="Test message")], role="user")]
@@ -80,7 +80,7 @@ def mock_aisuite_client_json():
 
 @pytest.fixture
 def llm_client_json(mock_aisuite_client_json):
-    return AiSuiteLLMClient(model="test:model", api_key="test-key")
+    return AiSuiteLLMClient(full_model_name="test:model", api_key="test-key")
 
 def test_create_structured_output_format(llm_client_json):
     messages = [Content(parts=[Part(text="Test message")], role="user")]
