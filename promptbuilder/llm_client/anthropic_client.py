@@ -8,7 +8,7 @@ from anthropic.types import RawMessageStreamEvent
 from promptbuilder.llm_client.base_client import BaseLLMClient, BaseLLMClientAsync, ResultType
 from promptbuilder.llm_client.messages import Response, Content, Candidate, UsageMetadata, Part, ThinkingConfig, Tool, ToolConfig, FunctionCall
 from promptbuilder.llm_client.config import DecoratorConfigs
-from promptbuilder.prompt_builder import schema_to_ts
+from promptbuilder.prompt_builder import PromptBuilder
 
 
 class DefaultMaxTokensStrategy:
@@ -207,9 +207,7 @@ class AnthropicLLMClient(BaseLLMClient):
                 parsed=parsed,
             )
         elif isinstance(result_type, type(BaseModel)):
-            message_with_structure = f"Return result in a following JSON structure:\n"
-            message_with_structure += f"{schema_to_ts(result_type)}\n"
-            message_with_structure += "Your output should consist solely of the JSON object, with no additional text."
+            message_with_structure = PromptBuilder().set_structured_output(result_type).build().render()
             anthropic_kwargs["messages"].append({"role": "user", "content": message_with_structure})
             
             response = self.client.messages.create(**anthropic_kwargs)
@@ -417,9 +415,7 @@ class AnthropicLLMClientAsync(BaseLLMClientAsync):
                 parsed=parsed,
             )
         elif isinstance(result_type, type(BaseModel)):
-            message_with_structure = f"Return result in a following JSON structure:\n"
-            message_with_structure += f"{schema_to_ts(result_type)}\n"
-            message_with_structure += "Your output should consist solely of the JSON object, with no additional text."
+            message_with_structure = PromptBuilder().set_structured_output(result_type).build().render()
             anthropic_kwargs["messages"].append({"role": "user", "content": message_with_structure})
             
             response = await self.client.messages.create(**anthropic_kwargs)

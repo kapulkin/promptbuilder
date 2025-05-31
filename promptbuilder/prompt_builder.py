@@ -56,7 +56,21 @@ class PromptBuilder:
     def structure(self, type: Type, description: str | None = None):
         if description:
             self.prompt_template += f"{description}\n"
-        self.prompt_template += f"{schema_to_ts(type)}"
+        ts_type = schema_to_ts(type)
+
+        circular_type_printed = False
+        for index, (name, dep_type) in enumerate(ts_type.circular_types.items()):
+            if name != ts_type.name:
+                if index > 0:
+                    self.prompt_template += "\n\n"
+                self.prompt_template += f"{name}: {dep_type}"
+                circular_type_printed = True
+        
+        if circular_type_printed > 0:
+            self.prompt_template += "\n\n"
+        if ts_type.name in ts_type.circular_types:
+            self.prompt_template += f"{ts_type.name}: "
+        self.prompt_template += ts_type.type
         return self
     
     def set_structured_output(self, type: Type, output_name: str = "result"):
@@ -76,8 +90,8 @@ class PromptBuilder:
         ))
         """
         self.prompt_template += f"Return {output_name} in a following JSON structure:\n"
-        self.prompt_template += f"{schema_to_ts(type)}\n"
-        self.prompt_template += "Your output should consist solely of the JSON object, with no additional text."
+        self.structure(type)
+        self.prompt_template += "\nYour output should consist solely of the JSON object, with no additional text."
         return self
 
     def build(self) -> Prompt:
@@ -86,20 +100,35 @@ class PromptBuilder:
 class TypeScriptType(BaseModel):
     pass
 
-def _schema_to_ts(value_type, indent: int = 2, depth: int = 0) -> str:
+class TypeScriptTypeWithDependencies(BaseModel):
+    name: str | None = None
+    type: str
+    dependencies: set[str] = set()
+    circular_types: dict[str, str] = {}
+
+def _uinoin_types(ts_types: list[TypeScriptTypeWithDependencies]) -> TypeScriptTypeWithDependencies:
+    type = ' | '.join([ts.type for ts in ts_types])
+    dependencies = set[str]()
+    circular_types = {}
+    for ts in ts_types:
+        dependencies.update(ts.dependencies)
+        circular_types.update(ts.circular_types)
+    return TypeScriptTypeWithDependencies(type=type, dependencies=dependencies, circular_types=circular_types)
+
+def _schema_to_ts(value_type, parent_types: set[str], indent: int = 2, depth: int = 0) -> TypeScriptTypeWithDependencies:
     """Convert Pydantic model to TypeScript type notation string."""
 
     # Handle basic types directly
     if value_type == str:
-        return 'string'
+        return TypeScriptTypeWithDependencies(type='string')
     if value_type in (int, float):
-        return 'number'
+        return TypeScriptTypeWithDependencies(type='number')
     if value_type == bool:
-        return 'boolean'
+        return TypeScriptTypeWithDependencies(type='boolean')
     if value_type == type(None):
-        return 'null'
+        return TypeScriptTypeWithDependencies(type='null')
     if value_type == None:
-        return 'any'
+        return TypeScriptTypeWithDependencies(type='any')
     
     origin = get_origin(value_type)
     # Handle Literal types
@@ -109,12 +138,12 @@ def _schema_to_ts(value_type, indent: int = 2, depth: int = 0) -> str:
         literal_values = []
         for arg in literal_args:
             if isinstance(arg, str):
-                literal_values.append(f"'{arg}'")
+                literal_values.append(TypeScriptTypeWithDependencies(type=f"'{arg}'"))
             elif isinstance(arg, (int, float, bool)):
-                literal_values.append(str(arg))
+                literal_values.append(TypeScriptTypeWithDependencies(type=str(arg)))
             else:
-                literal_values.append(f"{_schema_to_ts(arg, indent, depth)}")
-        return ' | '.join(literal_values)
+                literal_values.append(_schema_to_ts(arg, parent_types, indent, depth))
+        return _uinoin_types(literal_values)
     
     # Handle Enum types
     if isinstance(value_type, type) and issubclass(value_type, Enum):
@@ -127,49 +156,66 @@ def _schema_to_ts(value_type, indent: int = 2, depth: int = 0) -> str:
                 enum_values.append(str(v.value))
             else:
                 enum_values.append(f"'{str(v.value)}'")
-        return ' | '.join(enum_values)
+        return TypeScriptTypeWithDependencies(type=' | '.join(enum_values))
     
     # Handle list types
     if origin == list:
         list_type_args = get_args(value_type)
         if list_type_args:
-            item_ts_type = _schema_to_ts(list_type_args[0], indent, depth)
-            return f'{item_ts_type}[]'
-        return 'any[]'
+            item_ts_type = _schema_to_ts(list_type_args[0], parent_types, indent, depth)
+            return TypeScriptTypeWithDependencies(type=f'{item_ts_type.type}[]', dependencies=item_ts_type.dependencies)
+        return TypeScriptTypeWithDependencies(type='any[]')
     
     # Handle dict types
     if origin == dict:
         dict_type_args = get_args(value_type)
         if len(dict_type_args) == 2:
-            key_type = _schema_to_ts(dict_type_args[0], indent, depth)
-            value_type = _schema_to_ts(dict_type_args[1], indent, depth)
+            key_type = _schema_to_ts(dict_type_args[0], parent_types, indent, depth)
+            value_type = _schema_to_ts(dict_type_args[1], parent_types, indent, depth)
             # In TypeScript, only string, number, and symbol can be used as index types
-            if key_type not in ['string', 'number']:
-                key_type = 'string'
-            return '{{' + f' [key: {key_type}]: {value_type}' + '}}'
-        return '{{ [key: string]: any }}'
+            if key_type.type not in ['string', 'number']:
+                key_type.type = 'string'
+            dependencies = key_type.dependencies.union(value_type.dependencies)
+            circular_types = key_type.circular_types.copy()
+            circular_types.update(value_type.circular_types)
+            return TypeScriptTypeWithDependencies(
+                type='{{' + f' [key: {key_type.type}]: {value_type.type}' + '}}',
+                dependencies=dependencies, circular_types=circular_types
+            )
+        return TypeScriptTypeWithDependencies(type='{{ [key: string]: any }}')
     
     # Handle Union types
     if origin == UnionType or origin == Union:
         union_args = get_args(value_type)
 
-        ts_types = [_schema_to_ts(arg, indent, depth) for arg in union_args]
-        return ' | '.join(ts_types)
+        ts_types = [_schema_to_ts(arg, parent_types, indent, depth) for arg in union_args]
+        return _uinoin_types(ts_types)
 
     # If not a Pydantic model, return any
     if not hasattr(value_type, 'model_fields'):
-        return 'any'
+        return TypeScriptTypeWithDependencies(type='any')
     
     # Handle Pydantic models
     indent_str = ' ' * indent * depth
     fields_indent_str = indent_str + ' ' * indent
     fields = []
+
+    # Check for circular dependencies
+    type_name = value_type.__name__
+    if type_name in parent_types:
+        return TypeScriptTypeWithDependencies(name=type_name, type=type_name, dependencies={ type_name })
+
+    parent_types = parent_types.union({type_name})
+    dependencies = set[str]()
+    circular_types = {}
     for field_name, field in value_type.model_fields.items():
         field_type = field.annotation
         if field_type == TypeScriptType:
-            ts_type = field.title
+            ts_type = TypeScriptTypeWithDependencies(type=field.title)
         else:
-            ts_type = _schema_to_ts(field_type, indent, depth + 1)
+            ts_type = _schema_to_ts(field_type, parent_types, indent, depth + 1)
+            dependencies.update(ts_type.dependencies)
+            circular_types.update(ts_type.circular_types)
             
         # Add question mark for optional fields (those with default values or None default)
         is_optional = (field.default is not None and field.default is not PydanticUndefined) or field.default_factory is not None
@@ -178,14 +224,16 @@ def _schema_to_ts(value_type, indent: int = 2, depth: int = 0) -> str:
         # Add field description if available
         description = field.description or ''
         if description:
-            fields.append(f'{fields_indent_str}{field_name}{optional_marker}: {ts_type}, // {description}')
+            fields.append(f'{fields_indent_str}{field_name}{optional_marker}: {ts_type.type}, // {description}')
         else:
-            fields.append(f'{fields_indent_str}{field_name}{optional_marker}: {ts_type},')
+            fields.append(f'{fields_indent_str}{field_name}{optional_marker}: {ts_type.type},')
 
-    if len(fields) > 0:
-        return '{{\n' + '\n'.join(fields) + f'\n{indent_str}' + '}}'
-    else:
-        return f"'{str(value_type)}'"
+    type_str = '{{\n' + '\n'.join(fields) + f'\n{indent_str}' + '}}' if len(fields) > 0 else f"'{str(value_type)}'"
 
-def schema_to_ts(value_type, indent: int = 2) -> str:
-    return _schema_to_ts(value_type, indent, 0)
+    if type_name in dependencies:
+        circular_types[type_name] = type_str
+
+    return TypeScriptTypeWithDependencies(name=type_name, type=type_str, dependencies=dependencies, circular_types=circular_types)
+
+def schema_to_ts(value_type, indent: int = 2) -> TypeScriptTypeWithDependencies:
+    return _schema_to_ts(value_type, set[str](), indent, 0)

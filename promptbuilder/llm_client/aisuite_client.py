@@ -4,15 +4,15 @@ import aisuite_async
 from pydantic import BaseModel
 
 from promptbuilder.llm_client.base_client import BaseLLMClient, BaseLLMClientAsync, ResultType
-from promptbuilder.llm_client.messages import Response, Content, Candidate, UsageMetadata, Part, ThinkingConfig, Tool, ToolConfig, FunctionCall
+from promptbuilder.llm_client.messages import Response, Content, Candidate, UsageMetadata, Part, ThinkingConfig, Tool, ToolConfig, FunctionCall, Role
 from promptbuilder.llm_client.config import DecoratorConfigs
-from promptbuilder.prompt_builder import schema_to_ts
+from promptbuilder.prompt_builder import PromptBuilder
 
 
 class AiSuiteLLMClient(BaseLLMClient):
     provider: str = ""
-    user_tag: str = "user"
-    assistant_tag: str = "model"
+    user_tag: Role = "user"
+    assistant_tag: Role = "model"
     
     def __init__(
         self,
@@ -27,10 +27,10 @@ class AiSuiteLLMClient(BaseLLMClient):
         
         self.client = aisuite_async.Client(provider_configs={self.provider: {"api_key": api_key}})
 
-    def _internal_role(self, role: str) -> str:
+    def _internal_role(self, role: Role) -> str:
         return "user" if role == self.user_tag else "assistant"
 
-    def _external_role(self, role: str) -> str:
+    def _external_role(self, role: str) -> Role:
         return self.user_tag if role == "user" else self.assistant_tag
 
     @staticmethod
@@ -156,9 +156,7 @@ class AiSuiteLLMClient(BaseLLMClient):
                 parsed=parsed,
             )
         elif isinstance(result_type, type(BaseModel)):
-            message_with_structure = f"Return result in a following JSON structure:\n"
-            message_with_structure += f"{schema_to_ts(result_type)}\n"
-            message_with_structure += "Your output should consist solely of the JSON object, with no additional text."
+            message_with_structure = PromptBuilder().set_structured_output(result_type).build().render()
             aisuite_kwargs["messages"].append({"role": "user", "content": message_with_structure})
             response = self.client.chat.completions.create(**aisuite_kwargs)
             
@@ -207,7 +205,7 @@ class AiSuiteLLMClientAsync(BaseLLMClientAsync):
     def _internal_role(self, role: str) -> str:
         return "user" if role == self.user_tag else "assistant"
 
-    def _external_role(self, role: str) -> str:
+    def _external_role(self, role: str) -> Role:
         return self.user_tag if role == "user" else self.assistant_tag
 
     @staticmethod
@@ -333,9 +331,7 @@ class AiSuiteLLMClientAsync(BaseLLMClientAsync):
                 parsed=parsed,
             )
         elif isinstance(result_type, type(BaseModel)):
-            message_with_structure = f"Return result in a following JSON structure:\n"
-            message_with_structure += f"{schema_to_ts(result_type)}\n"
-            message_with_structure += "Your output should consist solely of the JSON object, with no additional text."
+            message_with_structure = PromptBuilder().set_structured_output(result_type).build().render()
             aisuite_kwargs["messages"].append({"role": "user", "content": message_with_structure})
             response = await self.client.chat.completions.create(**aisuite_kwargs)
             
