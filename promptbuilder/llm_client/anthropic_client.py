@@ -8,7 +8,7 @@ from anthropic.types import RawMessageStreamEvent
 from promptbuilder.llm_client.base_client import BaseLLMClient, BaseLLMClientAsync, ResultType
 from promptbuilder.llm_client.messages import Response, Content, Candidate, UsageMetadata, Part, ThinkingConfig, Tool, ToolConfig, FunctionCall
 from promptbuilder.llm_client.config import DecoratorConfigs
-from promptbuilder.prompt_builder import schema_to_ts
+from promptbuilder.prompt_builder import PromptBuilder
 
 
 class DefaultMaxTokensStrategy:
@@ -79,7 +79,7 @@ class AnthropicStreamIterator:
 
 
 class AnthropicLLMClient(BaseLLMClient):
-    provider: str = "anthropic"
+    PROVIDER: str = "anthropic"
     
     def __init__(
         self,
@@ -90,7 +90,7 @@ class AnthropicLLMClient(BaseLLMClient):
         default_max_tokens_strategy: DefaultMaxTokensStrategy = AnthropicDefaultMaxTokensStrategy(),
         **kwargs,
     ):
-        super().__init__(model, decorator_configs=decorator_configs, default_max_tokens=default_max_tokens)
+        super().__init__(AnthropicLLMClient.PROVIDER, model, decorator_configs=decorator_configs, default_max_tokens=default_max_tokens)
         self.client = Anthropic(api_key=api_key)
         self.default_max_tokens_strategy = default_max_tokens_strategy
     
@@ -207,9 +207,7 @@ class AnthropicLLMClient(BaseLLMClient):
                 parsed=parsed,
             )
         elif isinstance(result_type, type(BaseModel)):
-            message_with_structure = f"Return result in a following JSON structure:\n"
-            message_with_structure += f"{schema_to_ts(result_type)}\n"
-            message_with_structure += "Your output should consist solely of the JSON object, with no additional text."
+            message_with_structure = PromptBuilder().set_structured_output(result_type).build().render()
             anthropic_kwargs["messages"].append({"role": "user", "content": message_with_structure})
             
             response = self.client.messages.create(**anthropic_kwargs)
@@ -289,7 +287,7 @@ class AnthropicStreamIteratorAsync:
 
 
 class AnthropicLLMClientAsync(BaseLLMClientAsync):
-    provider: str = "anthropic"
+    PROVIDER: str = "anthropic"
     
     def __init__(
         self,
@@ -300,7 +298,7 @@ class AnthropicLLMClientAsync(BaseLLMClientAsync):
         default_max_tokens_strategy: DefaultMaxTokensStrategy = AnthropicDefaultMaxTokensStrategy(),
         **kwargs,
     ):
-        super().__init__(model, decorator_configs=decorator_configs, default_max_tokens=default_max_tokens)
+        super().__init__(AnthropicLLMClientAsync.PROVIDER, model, decorator_configs=decorator_configs, default_max_tokens=default_max_tokens)
         self.client = AsyncAnthropic(api_key=api_key)
         self.default_max_tokens_strategy = default_max_tokens_strategy
     
@@ -417,9 +415,7 @@ class AnthropicLLMClientAsync(BaseLLMClientAsync):
                 parsed=parsed,
             )
         elif isinstance(result_type, type(BaseModel)):
-            message_with_structure = f"Return result in a following JSON structure:\n"
-            message_with_structure += f"{schema_to_ts(result_type)}\n"
-            message_with_structure += "Your output should consist solely of the JSON object, with no additional text."
+            message_with_structure = PromptBuilder().set_structured_output(result_type).build().render()
             anthropic_kwargs["messages"].append({"role": "user", "content": message_with_structure})
             
             response = await self.client.messages.create(**anthropic_kwargs)

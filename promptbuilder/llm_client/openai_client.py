@@ -30,8 +30,8 @@ class OpenaiStreamIterator:
 
 
 class OpenaiLLMClient(BaseLLMClient):
-    provider = "openai"
-    
+    PROVIDER = "openai"
+
     def __init__(
         self,
         model: str,
@@ -40,7 +40,7 @@ class OpenaiLLMClient(BaseLLMClient):
         default_max_tokens: int | None = None,
         **kwargs,
     ):
-        super().__init__(model, decorator_configs=decorator_configs, default_max_tokens=default_max_tokens)
+        super().__init__(OpenaiLLMClient.PROVIDER, model, decorator_configs=decorator_configs, default_max_tokens=default_max_tokens)
         self.client = OpenAI(api_key=api_key)
     
     def create(
@@ -232,7 +232,7 @@ class OpenaiStreamIteratorAsync:
 
 
 class OpenaiLLMClientAsync(BaseLLMClientAsync):
-    provider = "openai"
+    PROVIDER = "openai"
     
     def __init__(
         self,
@@ -242,7 +242,7 @@ class OpenaiLLMClientAsync(BaseLLMClientAsync):
         default_max_tokens: int | None = None,
         **kwargs,
     ):
-        super().__init__(model, decorator_configs=decorator_configs, default_max_tokens=default_max_tokens)
+        super().__init__(OpenaiLLMClientAsync.PROVIDER, model, decorator_configs=decorator_configs, default_max_tokens=default_max_tokens)
         self.client = AsyncOpenAI(api_key=api_key)
     
     async def create(

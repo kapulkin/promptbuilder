@@ -14,11 +14,11 @@ _memory: dict[str, BaseLLMClient] = {}
 _memory_async: dict[str, BaseLLMClientAsync] = {}
 
 
-def get_client(client_name: str, api_key: str | None = None, decorator_configs: DecoratorConfigs | None = None, default_max_tokens: int | None = None) -> BaseLLMClient:
+def get_client(full_model_name: str, api_key: str | None = None, decorator_configs: DecoratorConfigs | None = None, default_max_tokens: int | None = None) -> BaseLLMClient:
     global _memory
     
-    if client_name not in _memory:
-        provider, model = client_name.split(":")
+    if full_model_name not in _memory:
+        provider, model = full_model_name.split(":")
         if provider == "google":
             if api_key is None:
                 client = GoogleLLMClient(model, decorator_configs=decorator_configs, default_max_tokens=default_max_tokens)
@@ -38,12 +38,12 @@ def get_client(client_name: str, api_key: str | None = None, decorator_configs: 
             if api_key is None:
                 raise ValueError(f"You should directly provide api_key for this provider: {provider}")
             else:
-                client = AiSuiteLLMClient(client_name, api_key, decorator_configs=decorator_configs, default_max_tokens=default_max_tokens)
+                client = AiSuiteLLMClient(full_model_name, api_key, decorator_configs=decorator_configs, default_max_tokens=default_max_tokens)
                 
-        _memory[client_name] = client
-        return _memory[client_name]
+        _memory[full_model_name] = client
+        return _memory[full_model_name]
     else:
-        client = _memory[client_name]
+        client = _memory[full_model_name]
         if decorator_configs is not None:
             client._decorator_configs = decorator_configs
         if default_max_tokens is not None:
@@ -51,11 +51,11 @@ def get_client(client_name: str, api_key: str | None = None, decorator_configs: 
         return client
 
 
-def get_async_client(client_name: str, api_key: str | None = None, decorator_configs: DecoratorConfigs | None = None, default_max_tokens: int | None = None) -> BaseLLMClientAsync:
+def get_async_client(full_model_name: str, api_key: str | None = None, decorator_configs: DecoratorConfigs | None = None, default_max_tokens: int | None = None) -> BaseLLMClientAsync:
     global _memory_async
     
-    if client_name not in _memory_async:
-        provider, model = client_name.split(":")
+    if full_model_name not in _memory_async:
+        provider, model = full_model_name.split(":")
         if provider == "google":
             if api_key is None:
                 client = GoogleLLMClientAsync(model, decorator_configs=decorator_configs, default_max_tokens=default_max_tokens)
@@ -75,12 +75,12 @@ def get_async_client(client_name: str, api_key: str | None = None, decorator_con
             if api_key is None:
                 raise ValueError(f"You should directly provide api_key for this provider: {provider}")
             else:
-                client = AiSuiteLLMClientAsync(client_name, api_key, decorator_configs=decorator_configs, default_max_tokens=default_max_tokens)
+                client = AiSuiteLLMClientAsync(full_model_name, api_key, decorator_configs=decorator_configs, default_max_tokens=default_max_tokens)
         
-        _memory_async[client_name] = client
-        return _memory_async[client_name]
+        _memory_async[full_model_name] = client
+        return _memory_async[full_model_name]
     else:
-        client = _memory_async[client_name]
+        client = _memory_async[full_model_name]
         if decorator_configs is not None:
             client._decorator_configs = decorator_configs
         if default_max_tokens is not None:
@@ -115,13 +115,13 @@ def configure(
         GLOBAL_CONFIG.default_max_tokens.update(update_max_tokens)
 
 def sync_existing_clients_with_global_config():
-    for client_name, llm_client in chain(_memory.items(), _memory_async.items()):
-        if client_name in GLOBAL_CONFIG.default_decorator_configs:
-            llm_client._decorator_configs = GLOBAL_CONFIG.default_decorator_configs[client_name]
+    for full_model_name, llm_client in chain(_memory.items(), _memory_async.items()):
+        if full_model_name in GLOBAL_CONFIG.default_decorator_configs:
+            llm_client._decorator_configs = GLOBAL_CONFIG.default_decorator_configs[full_model_name]
         else:
             llm_client._decorator_configs = DecoratorConfigs()
         
-        if client_name in GLOBAL_CONFIG.default_max_tokens:
-            llm_client.default_max_tokens = GLOBAL_CONFIG.default_max_tokens[client_name]
+        if full_model_name in GLOBAL_CONFIG.default_max_tokens:
+            llm_client.default_max_tokens = GLOBAL_CONFIG.default_max_tokens[full_model_name]
         else:
             llm_client.default_max_tokens = None

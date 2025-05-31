@@ -82,7 +82,7 @@ class ThinkingConfig(BaseModel):
 class Response(BaseModel):
     candidates: Optional[list[Candidate]] = None
     usage_metadata: Optional[UsageMetadata] = None
-    parsed: Optional[PydanticStructure | Json] = None
+    parsed: Optional[Json | PydanticStructure] = None
 
     @property
     def text(self) -> Optional[str]:
