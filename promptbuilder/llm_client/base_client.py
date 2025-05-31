@@ -18,7 +18,8 @@ type ResultType = Literal["json"] | type[PydanticStructure] | None
 class BaseLLMClient(utils.InheritDecoratorsMixin):
     provider: str
     
-    def __init__(self, model: str, decorator_configs: utils.DecoratorConfigs | None = None, default_max_tokens: int | None = None, **kwargs):
+    def __init__(self, provider: str, model: str, decorator_configs: utils.DecoratorConfigs | None = None, default_max_tokens: int | None = None, **kwargs):
+        self.provider = provider
         self.model = model
         
         if decorator_configs is None:
@@ -239,7 +240,8 @@ class BaseLLMClient(utils.InheritDecoratorsMixin):
 class BaseLLMClientAsync(utils.InheritDecoratorsMixin):
     provider: str
     
-    def __init__(self, model: str, decorator_configs: utils.DecoratorConfigs | None = None, default_max_tokens: int | None = None, **kwargs):
+    def __init__(self, provider: str, model: str, decorator_configs: utils.DecoratorConfigs | None = None, default_max_tokens: int | None = None, **kwargs):
+        self.provider = provider
         self.model = model
         
         if decorator_configs is None:
@@ -459,6 +461,8 @@ class BaseLLMClientAsync(utils.InheritDecoratorsMixin):
 
 class CachedLLMClient(BaseLLMClient):
     def __init__(self, llm_client: BaseLLMClient, cache_dir: str = "data/llm_cache"):
+        super().__init__(provider=llm_client.provider, model=llm_client.model, decorator_configs=llm_client._decorator_configs, default_max_tokens=llm_client.default_max_tokens)
+        self.provider = llm_client.provider
         self.llm_client = llm_client
         self.cache_dir = cache_dir
     
@@ -471,7 +475,7 @@ class CachedLLMClient(BaseLLMClient):
         return response
 
     @staticmethod
-    def create_cached(llm_client: BaseLLMClient, cache_dir: str, messages: list[Content], **kwargs) -> tuple[Response | None, list[dict], str]:
+    def create_cached(llm_client: BaseLLMClient | BaseLLMClientAsync, cache_dir: str, messages: list[Content], **kwargs) -> tuple[Response | None, list[dict], str]:
         messages_dump = [message.model_dump() for message in messages]
         key = hashlib.sha256(
             json.dumps((llm_client.full_model_name, messages_dump)).encode()
@@ -498,6 +502,8 @@ class CachedLLMClient(BaseLLMClient):
 
 class CachedLLMClientAsync(BaseLLMClientAsync):
     def __init__(self, llm_client: BaseLLMClientAsync, cache_dir: str = "data/llm_cache"):
+        super().__init__(provider=llm_client.provider, model=llm_client.model, decorator_configs=llm_client._decorator_configs, default_max_tokens=llm_client.default_max_tokens)
+        self.provider = llm_client.provider
         self.llm_client = llm_client
         self.cache_dir = cache_dir
     

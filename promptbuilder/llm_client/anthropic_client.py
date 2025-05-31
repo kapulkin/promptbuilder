@@ -79,7 +79,7 @@ class AnthropicStreamIterator:
 
 
 class AnthropicLLMClient(BaseLLMClient):
-    provider: str = "anthropic"
+    PROVIDER: str = "anthropic"
     
     def __init__(
         self,
@@ -90,7 +90,7 @@ class AnthropicLLMClient(BaseLLMClient):
         default_max_tokens_strategy: DefaultMaxTokensStrategy = AnthropicDefaultMaxTokensStrategy(),
         **kwargs,
     ):
-        super().__init__(model, decorator_configs=decorator_configs, default_max_tokens=default_max_tokens)
+        super().__init__(AnthropicLLMClient.PROVIDER, model, decorator_configs=decorator_configs, default_max_tokens=default_max_tokens)
         self.client = Anthropic(api_key=api_key)
         self.default_max_tokens_strategy = default_max_tokens_strategy
     
@@ -289,7 +289,7 @@ class AnthropicStreamIteratorAsync:
 
 
 class AnthropicLLMClientAsync(BaseLLMClientAsync):
-    provider: str = "anthropic"
+    PROVIDER: str = "anthropic"
     
     def __init__(
         self,
@@ -300,7 +300,7 @@ class AnthropicLLMClientAsync(BaseLLMClientAsync):
         default_max_tokens_strategy: DefaultMaxTokensStrategy = AnthropicDefaultMaxTokensStrategy(),
         **kwargs,
     ):
-        super().__init__(model, decorator_configs=decorator_configs, default_max_tokens=default_max_tokens)
+        super().__init__(AnthropicLLMClientAsync.PROVIDER, model, decorator_configs=decorator_configs, default_max_tokens=default_max_tokens)
         self.client = AsyncAnthropic(api_key=api_key)
         self.default_max_tokens_strategy = default_max_tokens_strategy
     

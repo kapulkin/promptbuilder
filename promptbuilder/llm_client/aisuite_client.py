@@ -22,8 +22,8 @@ class AiSuiteLLMClient(BaseLLMClient):
         default_max_tokens: int | None = None,
         **kwargs,
     ):
-        self.provider, model = full_model_name.split(":")
-        super().__init__(model, decorator_configs=decorator_configs, default_max_tokens=default_max_tokens)
+        provider, model = full_model_name.split(":")
+        super().__init__(provider, model, decorator_configs=decorator_configs, default_max_tokens=default_max_tokens)
         
         self.client = aisuite_async.Client(provider_configs={self.provider: {"api_key": api_key}})
 
@@ -200,8 +200,8 @@ class AiSuiteLLMClientAsync(BaseLLMClientAsync):
         default_max_tokens: int | None = None,
         **kwargs,
     ):
-        self.provider, model_name = full_model_name.split(":")
-        super().__init__(model_name, decorator_configs=decorator_configs, default_max_tokens=default_max_tokens)
+        provider, model_name = full_model_name.split(":")
+        super().__init__(provider, model_name, decorator_configs=decorator_configs, default_max_tokens=default_max_tokens)
         self.client = aisuite_async.AsyncClient(provider_configs={self.provider: {"api_key": api_key}})
 
     def _internal_role(self, role: str) -> str:

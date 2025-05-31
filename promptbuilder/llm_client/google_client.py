@@ -10,7 +10,7 @@ from promptbuilder.llm_client.config import DecoratorConfigs
 
 
 class GoogleLLMClient(BaseLLMClient):
-    provider: str = "google"
+    PROVIDER: str = "google"
     
     def __init__(
         self,
@@ -20,7 +20,7 @@ class GoogleLLMClient(BaseLLMClient):
         default_max_tokens: int | None = None,
         **kwargs,
     ):
-        super().__init__(model, decorator_configs=decorator_configs, default_max_tokens=default_max_tokens)
+        super().__init__(GoogleLLMClient.PROVIDER, model, decorator_configs=decorator_configs, default_max_tokens=default_max_tokens)
         self.client = Client(api_key=api_key)
     
     def create(
@@ -94,7 +94,7 @@ class GoogleLLMClient(BaseLLMClient):
 
 
 class GoogleLLMClientAsync(BaseLLMClientAsync):
-    provider: str = "google"
+    PROVIDER: str = "google"
     
     def __init__(
         self,
@@ -104,7 +104,7 @@ class GoogleLLMClientAsync(BaseLLMClientAsync):
         default_max_tokens: int | None = None,
         **kwargs,
     ):
-        super().__init__(model, decorator_configs=decorator_configs, default_max_tokens=default_max_tokens)
+        super().__init__(GoogleLLMClientAsync.PROVIDER, model, decorator_configs=decorator_configs, default_max_tokens=default_max_tokens)
         self.client = Client(api_key=api_key)
     
     async def create(
