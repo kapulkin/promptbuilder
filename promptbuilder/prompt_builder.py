@@ -163,7 +163,7 @@ def _schema_to_ts(value_type, parent_types: set[str], indent: int = 2, depth: in
         list_type_args = get_args(value_type)
         if list_type_args:
             item_ts_type = _schema_to_ts(list_type_args[0], parent_types, indent, depth)
-            return TypeScriptTypeWithDependencies(type=f'{item_ts_type.type}[]', dependencies=item_ts_type.dependencies)
+            return TypeScriptTypeWithDependencies(type=f'{item_ts_type.type}[]', dependencies=item_ts_type.dependencies, circular_types=item_ts_type.circular_types)
         return TypeScriptTypeWithDependencies(type='any[]')
     
     # Handle dict types
