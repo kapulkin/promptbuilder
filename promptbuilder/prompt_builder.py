@@ -115,6 +115,15 @@ def _uinoin_types(ts_types: list[TypeScriptTypeWithDependencies]) -> TypeScriptT
         circular_types.update(ts.circular_types)
     return TypeScriptTypeWithDependencies(type=type, dependencies=dependencies, circular_types=circular_types)
 
+def _type_with_fields(type_name: str, fields, indent_str: str) -> str:
+    return '{{\n' + '\n'.join(fields) + f'\n{indent_str}' + '}}' if len(fields) > 0 else f"'{type_name}'"
+
+def _unindent(text: str, indent: int) -> str:
+    """Remove leading indentation from each line in the text."""
+    lines = text.splitlines()
+    unindented_lines = [line[indent:] if len(line) >= indent and all(c == ' ' for c in line[:indent]) else line for line in lines]
+    return '\n'.join(unindented_lines)
+
 def _schema_to_ts(value_type, parent_types: set[str], indent: int = 2, depth: int = 0) -> TypeScriptTypeWithDependencies:
     """Convert Pydantic model to TypeScript type notation string."""
 
@@ -228,10 +237,12 @@ def _schema_to_ts(value_type, parent_types: set[str], indent: int = 2, depth: in
         else:
             fields.append(f'{fields_indent_str}{field_name}{optional_marker}: {ts_type.type},')
 
-    type_str = '{{\n' + '\n'.join(fields) + f'\n{indent_str}' + '}}' if len(fields) > 0 else f"'{str(value_type)}'"
+    type_str = _type_with_fields(type_name, fields, indent_str)
 
     if type_name in dependencies:
-        circular_types[type_name] = type_str
+        circular_types[type_name] = _unindent(type_str, indent * depth)
+        if depth > 0:
+            return TypeScriptTypeWithDependencies(name=type_name, type=type_name, dependencies=dependencies, circular_types=circular_types)
 
     return TypeScriptTypeWithDependencies(name=type_name, type=type_str, dependencies=dependencies, circular_types=circular_types)
 
