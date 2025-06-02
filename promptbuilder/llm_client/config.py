@@ -11,6 +11,9 @@ class LlmClientConfigs:
     
     default_max_tokens: dict[str, int] = dataclasses.field(default_factory=dict)
     """Dictionary mapping a client name to the default max_tokens value to be used for that model."""
+    
+    use_logfire: bool = False
+    """Flag indicating whether to use integrated logfire. If true, logfire.configure() must be called."""
 
 
 # The global config is the single global object in promptbuilder.llm_client

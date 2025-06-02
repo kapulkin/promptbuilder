@@ -94,6 +94,7 @@ def configure(
     update_decorator_configs: dict[str, DecoratorConfigs] | None = None,
     max_tokens: dict[str, int] | None = None,
     update_max_tokens: dict[str, int] | None = None,
+    use_logfire: bool | None = None,
 ):
     if decorator_configs is not None and update_decorator_configs is not None:
         warnings.warn("Both 'decorator_configs' and 'update_decorator_configs' were provided. "
@@ -113,6 +114,9 @@ def configure(
         GLOBAL_CONFIG.default_max_tokens = max_tokens
     if update_max_tokens is not None:
         GLOBAL_CONFIG.default_max_tokens.update(update_max_tokens)
+    
+    if use_logfire is not None:
+        GLOBAL_CONFIG.use_logfire = use_logfire
 
 def sync_existing_clients_with_global_config():
     for full_model_name, llm_client in chain(_memory.items(), _memory_async.items()):

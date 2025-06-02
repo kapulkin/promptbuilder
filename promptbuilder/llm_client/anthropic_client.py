@@ -64,13 +64,6 @@ class AnthropicStreamIterator:
     def __init__(self, anthropic_iterator: Stream[RawMessageStreamEvent]):
         self._anthropic_iterator = anthropic_iterator
 
-    def __next__(self) -> Response:
-        while True:
-            next_event = self._anthropic_iterator.__next__()
-            if next_event.type == "content_block_delta":
-                parts = [Part(text=next_event.delta.text)]
-                return Response(candidates=[Candidate(content=Content(parts=parts, role="model"))])
-
     def __iter__(self) -> Iterator[Response]:
         for next_event in self._anthropic_iterator:
             if next_event.type == "content_block_delta":
@@ -271,13 +264,6 @@ class AnthropicLLMClient(BaseLLMClient):
 class AnthropicStreamIteratorAsync:
     def __init__(self, anthropic_iterator: AsyncStream[RawMessageStreamEvent]):
         self._anthropic_iterator = anthropic_iterator
-
-    async def __anext__(self) -> Response:
-        while True:
-            next_event = await self._anthropic_iterator.__anext__()
-            if next_event.type == "content_block_delta":
-                parts = [Part(text=next_event.delta.text)]
-                return Response(candidates=[Candidate(content=Content(parts=parts, role="model"))])
 
     async def __aiter__(self) -> AsyncIterator[Response]:
         async for next_event in self._anthropic_iterator:

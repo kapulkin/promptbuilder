@@ -15,13 +15,6 @@ class OpenaiStreamIterator:
     def __init__(self, openai_iterator: Stream[ResponseStreamEvent]):
         self._openai_iterator = openai_iterator
 
-    def __next__(self) -> Response:
-        while True:
-            next_event = self._openai_iterator.__next__()
-            if next_event.type == "response.output_text.delta":
-                parts = [Part(text=next_event.delta)]
-                return Response(candidates=[Candidate(content=Content(parts=parts, role="model"))])
-
     def __iter__(self) -> Iterator[Response]:
         for next_event in self._openai_iterator:
             if next_event.type == "response.output_text.delta":
@@ -216,13 +209,6 @@ class OpenaiLLMClient(BaseLLMClient):
 class OpenaiStreamIteratorAsync:
     def __init__(self, openai_iterator: AsyncStream[ResponseStreamEvent]):
         self._openai_iterator = openai_iterator
-
-    async def __anext__(self) -> Response:
-        while True:
-            next_event = await self._openai_iterator.__anext__()
-            if next_event.type == "response.output_text.delta":
-                parts = [Part(text=next_event.delta)]
-                return Response(candidates=[Candidate(content=Content(parts=parts, role="model"))])
 
     async def __aiter__(self) -> AsyncIterator[Response]:
         async for next_event in self._openai_iterator:

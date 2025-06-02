@@ -7,6 +7,7 @@ from typing import Iterator, AsyncIterator, Literal, overload
 
 from promptbuilder.llm_client.messages import Response, Content, Part, Tool, ToolConfig, FunctionCall, FunctionCallingConfig, Json, ThinkingConfig, PydanticStructure
 import promptbuilder.llm_client.utils as utils
+import promptbuilder.llm_client.logs as logs
 from promptbuilder.llm_client.config import GLOBAL_CONFIG
 
 
@@ -55,6 +56,7 @@ class BaseLLMClient(utils.InheritDecoratorsMixin):
         except json.JSONDecodeError as e:
             raise ValueError(f"Failed to parse LLM response as JSON:\n{text}")
 
+    @logs.log_create
     @utils.retry_cls
     @utils.rpm_limit_cls
     def create(
@@ -161,6 +163,7 @@ class BaseLLMClient(utils.InheritDecoratorsMixin):
         else:
             return response.parsed
     
+    @logs.log_create_stream
     @utils.retry_cls
     @utils.rpm_limit_cls
     def create_stream(self, messages: list[Content], *, system_message: str | None = None, max_tokens: int | None = None) -> Iterator[Response]:
@@ -277,6 +280,7 @@ class BaseLLMClientAsync(utils.InheritDecoratorsMixin):
         except json.JSONDecodeError as e:
             raise ValueError(f"Failed to parse LLM response as JSON:\n{text}")
 
+    @logs.log_async_create
     @utils.retry_cls_async
     @utils.rpm_limit_cls_async
     async def create(
@@ -383,6 +387,7 @@ class BaseLLMClientAsync(utils.InheritDecoratorsMixin):
         else:
             return response.parsed
     
+    @logs.log_async_create_stream
     @utils.retry_cls_async
     @utils.rpm_limit_cls_async
     async def create_stream(self, messages: list[Content], *, system_message: str | None = None, max_tokens: int | None = None) -> AsyncIterator[Response]:
