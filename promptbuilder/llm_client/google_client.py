@@ -5,7 +5,7 @@ from pydantic import BaseModel
 from google.genai import Client, types
 
 from promptbuilder.llm_client.base_client import BaseLLMClient, BaseLLMClientAsync, ResultType
-from promptbuilder.llm_client.messages import Response, Content, ThinkingConfig, Tool, ToolConfig
+from promptbuilder.llm_client.types import Response, Content, ThinkingConfig, Tool, ToolConfig
 from promptbuilder.llm_client.config import DecoratorConfigs
 
 

@@ -2,7 +2,7 @@ from typing import Callable, ParamSpec, TypeVar, Awaitable, Generic, Type, Any
 
 from pydantic import BaseModel
 
-from promptbuilder.llm_client.messages import Tool, FunctionDeclaration, Schema
+from promptbuilder.llm_client.types import Tool, FunctionDeclaration, Schema
 
 
 P = ParamSpec("P")

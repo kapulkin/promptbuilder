@@ -3,7 +3,7 @@ from unittest.mock import Mock, patch, AsyncMock
 from promptbuilder.llm_client import CachedLLMClientAsync
 from promptbuilder.llm_client import get_client, get_async_client
 from promptbuilder.llm_client.aisuite_client import AiSuiteLLMClientAsync
-from promptbuilder.llm_client.messages import Completion, Choice, Message, Usage, Response, Candidate, Content, Part, UsageMetadata
+from promptbuilder.llm_client.types import Completion, Choice, Message, Usage, Response, Candidate, Content, Part, UsageMetadata
 import json
 import os
 import tempfile

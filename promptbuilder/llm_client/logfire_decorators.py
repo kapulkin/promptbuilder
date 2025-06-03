@@ -7,7 +7,7 @@ import logfire
 
 from promptbuilder.llm_client.utils import inherited_decorator
 from promptbuilder.llm_client.config import GLOBAL_CONFIG
-from promptbuilder.llm_client.messages import Response, UsageMetadata
+from promptbuilder.llm_client.types import Response, UsageMetadata
 
 
 P = ParamSpec("P")
@@ -44,7 +44,7 @@ def extract_span_data(self, *args, **kwargs) -> dict[str, Any]:
 
 
 @inherited_decorator
-def log_create(class_method: Callable[P, Response]) -> Callable[P, Response]:
+def create(class_method: Callable[P, Response]) -> Callable[P, Response]:
     """
     Decorator to log llm client's create method using logfire
     """
@@ -76,7 +76,7 @@ def log_create(class_method: Callable[P, Response]) -> Callable[P, Response]:
 
 
 @inherited_decorator
-def log_async_create(class_method: Callable[P, Awaitable[Response]]) -> Callable[P, Awaitable[Response]]:
+def create_async(class_method: Callable[P, Awaitable[Response]]) -> Callable[P, Awaitable[Response]]:
     """
     Decorator to log llm client's async create method using logfire
     """    
@@ -144,7 +144,7 @@ def record_streaming(span: logfire.LogfireSpan):
 
 
 @inherited_decorator
-def log_create_stream(class_method: Callable[P, Iterable[Response]]) -> Callable[P, Iterable[Response]]:
+def create_stream(class_method: Callable[P, Iterable[Response]]) -> Callable[P, Iterable[Response]]:
     """
     Decorator to log llm client's create_stream method using logfire
     """    
@@ -173,7 +173,7 @@ def log_create_stream(class_method: Callable[P, Iterable[Response]]) -> Callable
     return wrapper
 
 @inherited_decorator
-def log_async_create_stream(class_method: Callable[P, AsyncIterable[Response]]) -> Callable[P, AsyncIterable[Response]]:
+def create_stream_async(class_method: Callable[P, AsyncIterable[Response]]) -> Callable[P, AsyncIterable[Response]]:
     """
     Decorator to log llm client's async create_stream method using logfire
     """    

@@ -6,7 +6,7 @@ from anthropic import Anthropic, AsyncAnthropic, Stream, AsyncStream
 from anthropic.types import RawMessageStreamEvent
 
 from promptbuilder.llm_client.base_client import BaseLLMClient, BaseLLMClientAsync, ResultType
-from promptbuilder.llm_client.messages import Response, Content, Candidate, UsageMetadata, Part, ThinkingConfig, Tool, ToolConfig, FunctionCall
+from promptbuilder.llm_client.types import Response, Content, Candidate, UsageMetadata, Part, ThinkingConfig, Tool, ToolConfig, FunctionCall
 from promptbuilder.llm_client.config import DecoratorConfigs
 from promptbuilder.prompt_builder import PromptBuilder
 

@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from promptbuilder.llm_client.messages import Content
+from promptbuilder.llm_client.types import Content
 from typing import Any, TypeVar, Generic
 
 

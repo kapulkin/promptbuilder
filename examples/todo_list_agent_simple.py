@@ -5,7 +5,7 @@ from typing import List
 from pydantic import BaseModel, Field
 from promptbuilder.agent.agent import AgentRouter, MessageFormat
 from promptbuilder.agent.context import Context, InMemoryDialogHistory
-from promptbuilder.llm_client.messages import Content, Part
+from promptbuilder.llm_client.types import Content, Part
 from promptbuilder.llm_client import BaseLLMClient, get_client
 import os
 import dotenv

@@ -4,7 +4,7 @@ import aisuite_async
 from pydantic import BaseModel
 
 from promptbuilder.llm_client.base_client import BaseLLMClient, BaseLLMClientAsync, ResultType
-from promptbuilder.llm_client.messages import Response, Content, Candidate, UsageMetadata, Part, ThinkingConfig, Tool, ToolConfig, FunctionCall, Role
+from promptbuilder.llm_client.types import Response, Content, Candidate, UsageMetadata, Part, ThinkingConfig, Tool, ToolConfig, FunctionCall, Role
 from promptbuilder.llm_client.config import DecoratorConfigs
 from promptbuilder.prompt_builder import PromptBuilder
 

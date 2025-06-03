@@ -2,7 +2,7 @@ import pytest
 from unittest.mock import Mock, patch
 from promptbuilder.llm_client import CachedLLMClient
 from promptbuilder.llm_client.aisuite_client import AiSuiteLLMClient
-from promptbuilder.llm_client.messages import Completion, Choice, Message, Usage, Response, Candidate, Content, Part, UsageMetadata
+from promptbuilder.llm_client.types import Completion, Choice, Message, Usage, Response, Candidate, Content, Part, UsageMetadata
 import json
 import os
 import tempfile
