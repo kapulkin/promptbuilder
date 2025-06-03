@@ -11,6 +11,16 @@ from promptbuilder.llm_client.config import DecoratorConfigs
 from promptbuilder.prompt_builder import PromptBuilder
 
 
+def sum_optional_ints(a: int | None, b: int | None) -> int | None:
+    if a is None and b is None:
+        return None
+    if a is None:
+        return b
+    if b is None:
+        return a
+    return a + b
+
+
 class DefaultMaxTokensStrategy:
     def for_create(self, model: str) -> int:
         raise NotImplementedError
@@ -65,10 +75,32 @@ class AnthropicStreamIterator:
         self._anthropic_iterator = anthropic_iterator
 
     def __iter__(self) -> Iterator[Response]:
+        input_tokens: int | None = None
+        output_tokens: int | None = None
+        total_tokens : int | None = None
         for next_event in self._anthropic_iterator:
-            if next_event.type == "content_block_delta":
-                parts = [Part(text=next_event.delta.text)]
-                yield Response(candidates=[Candidate(content=Content(parts=parts, role="model"))])
+            if next_event.type == "message_start":
+                input_tokens = sum_optional_ints(input_tokens, next_event.message.usage.input_tokens)
+                output_tokens = sum_optional_ints(output_tokens, next_event.message.usage.output_tokens)
+            elif next_event.type == "content_block_delta":
+                if next_event.delta.type == "thinking_delta":
+                    parts = [Part(text=next_event.delta.thinking, thought=True)]
+                    yield Response(candidates=[Candidate(content=Content(parts=parts, role="model"))])
+                elif next_event.delta.type == "text_delta":
+                    parts = [Part(text=next_event.delta.text)]
+                    yield Response(candidates=[Candidate(content=Content(parts=parts, role="model"))])
+            elif next_event.type == "message_delta":
+                input_tokens = sum_optional_ints(input_tokens, next_event.usage.input_tokens)
+                output_tokens = sum_optional_ints(output_tokens, next_event.usage.output_tokens)
+        
+        if input_tokens is not None or output_tokens is not None:
+            total_tokens = (input_tokens or 0) + (output_tokens or 0)
+        usage_metadata = UsageMetadata(
+            candidates_token_count=output_tokens,
+            prompt_token_count=input_tokens,
+            total_token_count=total_tokens,
+        )
+        yield Response(candidates=[Candidate(content=Content(parts=[Part(text="")], role="model"))], usage_metadata=usage_metadata)
 
 
 class AnthropicLLMClient(BaseLLMClient):
@@ -266,10 +298,32 @@ class AnthropicStreamIteratorAsync:
         self._anthropic_iterator = anthropic_iterator
 
     async def __aiter__(self) -> AsyncIterator[Response]:
+        input_tokens: int | None = None
+        output_tokens: int | None = None
+        total_tokens : int | None = None
         async for next_event in self._anthropic_iterator:
-            if next_event.type == "content_block_delta":
-                parts = [Part(text=next_event.delta.text)]
-                yield Response(candidates=[Candidate(content=Content(parts=parts, role="model"))])
+            if next_event.type == "message_start":
+                input_tokens = sum_optional_ints(input_tokens, next_event.message.usage.input_tokens)
+                output_tokens = sum_optional_ints(output_tokens, next_event.message.usage.output_tokens)
+            elif next_event.type == "content_block_delta":
+                if next_event.delta.type == "thinking_delta":
+                    parts = [Part(text=next_event.delta.thinking, thought=True)]
+                    yield Response(candidates=[Candidate(content=Content(parts=parts, role="model"))])
+                elif next_event.delta.type == "text_delta":
+                    parts = [Part(text=next_event.delta.text)]
+                    yield Response(candidates=[Candidate(content=Content(parts=parts, role="model"))])
+            elif next_event.type == "message_delta":
+                input_tokens = sum_optional_ints(input_tokens, next_event.usage.input_tokens)
+                output_tokens = sum_optional_ints(output_tokens, next_event.usage.output_tokens)
+        
+        if input_tokens is not None or output_tokens is not None:
+            total_tokens = (input_tokens or 0) + (output_tokens or 0)
+        usage_metadata = UsageMetadata(
+            candidates_token_count=output_tokens,
+            prompt_token_count=input_tokens,
+            total_token_count=total_tokens,
+        )
+        yield Response(candidates=[Candidate(content=Content(parts=[Part(text="")], role="model"))], usage_metadata=usage_metadata)
 
 
 class AnthropicLLMClientAsync(BaseLLMClientAsync):

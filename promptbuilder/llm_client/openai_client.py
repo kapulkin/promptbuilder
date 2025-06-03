@@ -16,10 +16,24 @@ class OpenaiStreamIterator:
         self._openai_iterator = openai_iterator
 
     def __iter__(self) -> Iterator[Response]:
+        output_tokens: int | None = None
+        input_tokens: int | None = None
+        total_tokens: int | None = None
         for next_event in self._openai_iterator:
             if next_event.type == "response.output_text.delta":
                 parts = [Part(text=next_event.delta)]
                 yield Response(candidates=[Candidate(content=Content(parts=parts, role="model"))])
+            elif next_event.type == "response.completed":
+                output_tokens = next_event.response.usage.output_tokens
+                input_tokens = next_event.response.usage.input_tokens
+                total_tokens = next_event.response.usage.total_tokens
+        
+        usage_metadata = UsageMetadata(
+            candidates_token_count=output_tokens,
+            prompt_token_count=input_tokens,
+            total_token_count=total_tokens,
+        )
+        yield Response(candidates=[Candidate(content=Content(parts=[Part(text="")], role="model"))], usage_metadata=usage_metadata)
 
 
 class OpenaiLLMClient(BaseLLMClient):
@@ -211,10 +225,24 @@ class OpenaiStreamIteratorAsync:
         self._openai_iterator = openai_iterator
 
     async def __aiter__(self) -> AsyncIterator[Response]:
+        output_tokens: int | None = None
+        input_tokens: int | None = None
+        total_tokens: int | None = None
         async for next_event in self._openai_iterator:
             if next_event.type == "response.output_text.delta":
                 parts = [Part(text=next_event.delta)]
                 yield Response(candidates=[Candidate(content=Content(parts=parts, role="model"))])
+            elif next_event.type == "response.completed":
+                output_tokens = next_event.response.usage.output_tokens
+                input_tokens = next_event.response.usage.input_tokens
+                total_tokens = next_event.response.usage.total_tokens
+                
+        usage_metadata = UsageMetadata(
+            candidates_token_count=output_tokens,
+            prompt_token_count=input_tokens,
+            total_token_count=total_tokens,
+        )
+        yield Response(candidates=[Candidate(content=Content(parts=[Part(text="")], role="model"))], usage_metadata=usage_metadata)
 
 
 class OpenaiLLMClientAsync(BaseLLMClientAsync):
