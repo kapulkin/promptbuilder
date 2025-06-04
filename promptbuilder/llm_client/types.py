@@ -1,4 +1,5 @@
 import logging
+from abc import ABC, abstractmethod
 from typing import Optional, Any, Callable, Literal, TypeVar, Self
 
 from pydantic import BaseModel, model_validator
@@ -12,6 +13,13 @@ type Json = list | dict
 type JsonType = Literal["string", "number", "integer", "boolean", "array", "object"]
 PydanticStructure = TypeVar("PydanticStructure", bound=BaseModel)
 
+
+class CustomApiKey(ABC):
+    @abstractmethod
+    def __hash__(self):
+        pass
+
+type ApiKey = str | CustomApiKey
 
 class Message(BaseModel):
     role: str

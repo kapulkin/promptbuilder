@@ -47,7 +47,6 @@ class RetryConfig(BaseModel):
 
 class RpmLimitConfig(BaseModel):
     rpm_limit: int = 0
-    last_request_time: float | None = None
 
 class DecoratorConfigs(BaseModel):
     retry: RetryConfig | None = None
@@ -139,16 +138,16 @@ def rpm_limit_cls(class_method: Callable[P, T]) -> Callable[P, T]:
         if self._decorator_configs.rpm_limit.rpm_limit <= 0:
             return class_method(self, *args, **kwargs)
         
-        if self._decorator_configs.rpm_limit.last_request_time is None:
-            self._decorator_configs.rpm_limit.last_request_time = time.time() - 60 / self._decorator_configs.rpm_limit.rpm_limit
+        if not hasattr(self, "_last_request_time"):
+            self._last_request_time = time.time() - 60 / self._decorator_configs.rpm_limit.rpm_limit
         
         while True:
-            if time.time() - self._decorator_configs.rpm_limit.last_request_time < 60 / self._decorator_configs.rpm_limit.rpm_limit:
-                diff = 60 / self._decorator_configs.rpm_limit.rpm_limit - (time.time() - self._decorator_configs.rpm_limit.last_request_time)
+            if time.time() - self._last_request_time < 60 / self._decorator_configs.rpm_limit.rpm_limit:
+                diff = 60 / self._decorator_configs.rpm_limit.rpm_limit - (time.time() - self._last_request_time)
                 time.sleep(diff)
                 continue
             
-            self._decorator_configs.rpm_limit.last_request_time = time.time()
+            self._last_request_time = time.time()
             return class_method(self, *args, **kwargs)
     return wrapper
 
@@ -170,15 +169,15 @@ def rpm_limit_cls_async(class_method: Callable[P, Awaitable[T]]) -> Callable[P, 
         if self._decorator_configs.rpm_limit.rpm_limit <= 0:
             return await class_method(self, *args, **kwargs)
         
-        if self._decorator_configs.rpm_limit.last_request_time is None:
-            self._decorator_configs.rpm_limit.last_request_time = time.time() - 60 / self._decorator_configs.rpm_limit.rpm_limit
+        if not hasattr(self, "_last_request_time"):
+            self._last_request_time = time.time() - 60 / self._decorator_configs.rpm_limit.rpm_limit
         
         while True:
-            if time.time() - self._decorator_configs.rpm_limit.last_request_time < 60 / self._decorator_configs.rpm_limit.rpm_limit:
-                diff = 60 / self._decorator_configs.rpm_limit.rpm_limit - (time.time() - self._decorator_configs.rpm_limit.last_request_time)
+            if time.time() - self._last_request_time < 60 / self._decorator_configs.rpm_limit.rpm_limit:
+                diff = 60 / self._decorator_configs.rpm_limit.rpm_limit - (time.time() - self._last_request_time)
                 await asyncio.sleep(diff)
                 continue
             
-            self._decorator_configs.rpm_limit.last_request_time = time.time()
+            self._last_request_time = time.time()
             return await class_method(self, *args, **kwargs)
     return wrapper

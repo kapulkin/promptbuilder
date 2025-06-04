@@ -3,13 +3,21 @@ from typing import AsyncIterator, Iterator, Any
 
 import boto3
 import aioboto3
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from botocore.eventstream import EventStream
 
 from promptbuilder.llm_client.base_client import BaseLLMClient, BaseLLMClientAsync, ResultType
-from promptbuilder.llm_client.types import Response, Content, Candidate, UsageMetadata, Part, ThinkingConfig, Tool, ToolConfig, FunctionCall
+from promptbuilder.llm_client.types import Response, Content, Candidate, UsageMetadata, Part, ThinkingConfig, Tool, ToolConfig, FunctionCall, CustomApiKey
 from promptbuilder.llm_client.config import DecoratorConfigs
 from promptbuilder.prompt_builder import PromptBuilder
+
+
+class BedrockApiKey(BaseModel, CustomApiKey):
+    model_config = ConfigDict(frozen=True)
+    
+    aws_access_key_id: str = os.getenv("AWS_ACCESS_KEY_ID")
+    aws_secret_access_key: str = os.getenv("AWS_SECRET_ACCESS_KEY")
+    aws_region: str = os.getenv("AWS_DEFAULT_REGION", "us-east-1")
 
 
 class BedrockStreamIterator:
@@ -43,17 +51,22 @@ class BedrockLLMClient(BaseLLMClient):
     def __init__(
         self,
         model: str,
-        aws_access_key_id: str = os.getenv("AWS_ACCESS_KEY_ID"),
-        aws_secret_access_key: str = os.getenv("AWS_SECRET_ACCESS_KEY"),
-        aws_region: str = os.getenv("AWS_DEFAULT_REGION", "us-east-1"),
+        api_key: BedrockApiKey = BedrockApiKey(),
         decorator_configs: DecoratorConfigs | None = None,
         default_max_tokens: int | None = None,
         **kwargs,
     ):
+        if api_key is None or not isinstance(api_key, BedrockApiKey):
+            raise ValueError(
+                "To create a bedrock llm client you need to either set the environment variables "
+                "AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, and optional AWS_DEFAULT_REGION or pass the api_key as BedrockApiKey instance"
+            )
         super().__init__(BedrockLLMClient.PROVIDER, model, decorator_configs=decorator_configs, default_max_tokens=default_max_tokens)
-        self._aws_access_key_id = aws_access_key_id
-        self._aws_secret_access_key = aws_secret_access_key
-        self._aws_region = aws_region
+        self._api_key = api_key
+    
+    @property
+    def api_key(self) -> BedrockApiKey:
+        return self._api_key
     
     def create(
         self,
@@ -124,9 +137,9 @@ class BedrockLLMClient(BaseLLMClient):
         
         bedrock_runtime_client = boto3.client(
             "bedrock-runtime",
-            region_name=self._aws_region,
-            aws_access_key_id=self._aws_access_key_id,
-            aws_secret_access_key=self._aws_secret_access_key,
+            region_name=self._api_key.aws_region,
+            aws_access_key_id=self._api_key.aws_access_key_id,
+            aws_secret_access_key=self._api_key.aws_secret_access_key,
         )
         
         if result_type is None:
@@ -242,9 +255,9 @@ class BedrockLLMClient(BaseLLMClient):
         
         bedrock_runtime_client = boto3.client(
             "bedrock-runtime",
-            region_name=self._aws_region,
-            aws_access_key_id=self._aws_access_key_id,
-            aws_secret_access_key=self._aws_secret_access_key,
+            region_name=self._api_key.aws_region,
+            aws_access_key_id=self._api_key.aws_access_key_id,
+            aws_secret_access_key=self._api_key.aws_secret_access_key,
         )
         response = bedrock_runtime_client.converse_stream(**bedrock_kwargs)
         return BedrockStreamIterator(response["stream"])
@@ -285,18 +298,27 @@ class BedrockLLMClientAsync(BaseLLMClientAsync):
     def __init__(
         self,
         model: str,
-        aws_access_key_id: str = os.getenv("AWS_ACCESS_KEY_ID"),
-        aws_secret_access_key: str = os.getenv("AWS_SECRET_ACCESS_KEY"),
-        aws_region: str = os.getenv("AWS_DEFAULT_REGION", "us-east-1"),
+        api_key: BedrockApiKey = BedrockApiKey(),
         decorator_configs: DecoratorConfigs | None = None,
         default_max_tokens: int | None = None,
         **kwargs,
     ):
+        if api_key is None or not isinstance(api_key, BedrockApiKey):
+            raise ValueError(
+                "To create a bedrock llm client you need to either set the environment variables "
+                "AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, and optional AWS_DEFAULT_REGION or pass the api_key as BedrockApiKey instance"
+            )
         super().__init__(BedrockLLMClient.PROVIDER, model, decorator_configs=decorator_configs, default_max_tokens=default_max_tokens)
-        self._aioboto_session = aioboto3.Session(aws_access_key_id=aws_access_key_id, aws_secret_access_key=aws_secret_access_key, region_name=aws_region)
-        self._aws_access_key_id = aws_access_key_id
-        self._aws_secret_access_key = aws_secret_access_key
-        self._aws_region = aws_region
+        self._api_key = api_key
+        self._aioboto_session = aioboto3.Session(
+            aws_access_key_id=api_key.aws_access_key_id,
+            aws_secret_access_key=api_key.aws_secret_access_key,
+            region_name=api_key.aws_region,
+        )
+    
+    @property
+    def api_key(self) -> BedrockApiKey:
+        return self._api_key
     
     async def create(
         self,

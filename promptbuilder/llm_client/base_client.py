@@ -3,9 +3,10 @@ import json
 import os
 import hashlib
 import logging
+from abc import ABC, abstractmethod
 from typing import Iterator, AsyncIterator, Literal, overload
 
-from promptbuilder.llm_client.types import Response, Content, Part, Tool, ToolConfig, FunctionCall, FunctionCallingConfig, Json, ThinkingConfig, PydanticStructure
+from promptbuilder.llm_client.types import Response, Content, Part, Tool, ToolConfig, FunctionCall, FunctionCallingConfig, Json, ThinkingConfig, ApiKey, PydanticStructure
 import promptbuilder.llm_client.utils as utils
 import promptbuilder.llm_client.logfire_decorators as logfire_decorators
 from promptbuilder.llm_client.config import GLOBAL_CONFIG
@@ -16,7 +17,7 @@ logger = logging.getLogger(__name__)
 type ResultType = Literal["json"] | type[PydanticStructure] | None
 
 
-class BaseLLMClient(utils.InheritDecoratorsMixin):
+class BaseLLMClient(ABC, utils.InheritDecoratorsMixin):
     provider: str
     
     def __init__(self, provider: str, model: str, decorator_configs: utils.DecoratorConfigs | None = None, default_max_tokens: int | None = None, **kwargs):
@@ -34,6 +35,11 @@ class BaseLLMClient(utils.InheritDecoratorsMixin):
             if self.full_model_name in GLOBAL_CONFIG.default_max_tokens:
                 default_max_tokens = GLOBAL_CONFIG.default_max_tokens[self.full_model_name]
         self.default_max_tokens = default_max_tokens
+    
+    @property
+    @abstractmethod
+    def api_key(self) -> ApiKey:
+        pass
     
     @property
     def full_model_name(self) -> str:
@@ -59,6 +65,7 @@ class BaseLLMClient(utils.InheritDecoratorsMixin):
     @logfire_decorators.create
     @utils.retry_cls
     @utils.rpm_limit_cls
+    @abstractmethod
     def create(
         self,
         messages: list[Content],
@@ -70,7 +77,7 @@ class BaseLLMClient(utils.InheritDecoratorsMixin):
         tools: list[Tool] | None = None,
         tool_config: ToolConfig = ToolConfig(),
     ) -> Response:
-        raise NotImplementedError
+        pass
     
     @overload
     def create_value(
@@ -240,7 +247,7 @@ class BaseLLMClient(utils.InheritDecoratorsMixin):
         )
 
 
-class BaseLLMClientAsync(utils.InheritDecoratorsMixin):
+class BaseLLMClientAsync(ABC, utils.InheritDecoratorsMixin):
     provider: str
     
     def __init__(self, provider: str, model: str, decorator_configs: utils.DecoratorConfigs | None = None, default_max_tokens: int | None = None, **kwargs):
@@ -258,6 +265,11 @@ class BaseLLMClientAsync(utils.InheritDecoratorsMixin):
             if self.full_model_name in GLOBAL_CONFIG.default_max_tokens:
                 default_max_tokens = GLOBAL_CONFIG.default_max_tokens[self.full_model_name]
         self.default_max_tokens = default_max_tokens
+    
+    @property
+    @abstractmethod
+    def api_key(self) -> ApiKey:
+        pass
     
     @property
     def full_model_name(self) -> str:
@@ -283,6 +295,7 @@ class BaseLLMClientAsync(utils.InheritDecoratorsMixin):
     @logfire_decorators.create_async
     @utils.retry_cls_async
     @utils.rpm_limit_cls_async
+    @abstractmethod
     async def create(
         self,
         messages: list[Content],
@@ -294,7 +307,7 @@ class BaseLLMClientAsync(utils.InheritDecoratorsMixin):
         tools: list[Tool] | None = None,
         tool_config: ToolConfig = ToolConfig(),
     ) -> Response:
-        raise NotImplementedError
+        pass
     
     @overload
     async def create_value(

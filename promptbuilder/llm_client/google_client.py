@@ -20,8 +20,15 @@ class GoogleLLMClient(BaseLLMClient):
         default_max_tokens: int | None = None,
         **kwargs,
     ):
+        if api_key is None or not isinstance(api_key, str):
+            raise ValueError("To create a google llm client you need to either set the environment variable GOOGLE_API_KEY or pass the api_key in string format")
         super().__init__(GoogleLLMClient.PROVIDER, model, decorator_configs=decorator_configs, default_max_tokens=default_max_tokens)
+        self._api_key = api_key
         self.client = Client(api_key=api_key)
+    
+    @property
+    def api_key(self) -> str:
+        return self._api_key
     
     def create(
         self,
@@ -104,8 +111,15 @@ class GoogleLLMClientAsync(BaseLLMClientAsync):
         default_max_tokens: int | None = None,
         **kwargs,
     ):
+        if api_key is None or not isinstance(api_key, str):
+            raise ValueError("To create a google llm client you need to either set the environment variable GOOGLE_API_KEY or pass the api_key in string format")
         super().__init__(GoogleLLMClientAsync.PROVIDER, model, decorator_configs=decorator_configs, default_max_tokens=default_max_tokens)
+        self._api_key = api_key
         self.client = Client(api_key=api_key)
+    
+    @property
+    def api_key(self) -> str:
+        return self._api_key
     
     async def create(
         self,

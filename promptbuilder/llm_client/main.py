@@ -1,6 +1,7 @@
 import warnings
 from itertools import chain
 
+from promptbuilder.llm_client.types import ApiKey
 from promptbuilder.llm_client.base_client import BaseLLMClient, BaseLLMClientAsync
 from promptbuilder.llm_client.config import GLOBAL_CONFIG
 from promptbuilder.llm_client.utils import DecoratorConfigs
@@ -11,85 +12,95 @@ from promptbuilder.llm_client.bedrock_client import BedrockLLMClient, BedrockLLM
 from promptbuilder.llm_client.aisuite_client import AiSuiteLLMClient, AiSuiteLLMClientAsync
 
 
-_memory: dict[str, BaseLLMClient] = {}
-_memory_async: dict[str, BaseLLMClientAsync] = {}
+
+_memory: dict[tuple[str, ApiKey], BaseLLMClient] = {}
+_memory_async: dict[tuple[str, ApiKey], BaseLLMClientAsync] = {}
 
 
-def get_client(full_model_name: str, api_key: str | None = None, decorator_configs: DecoratorConfigs | None = None, default_max_tokens: int | None = None) -> BaseLLMClient:
+def get_client(full_model_name: str, api_key: ApiKey | None = None, decorator_configs: DecoratorConfigs | None = None, default_max_tokens: int | None = None) -> BaseLLMClient:
     global _memory
     
-    if full_model_name not in _memory:
-        provider, model = full_model_name.split(":", 1)
-        if provider == "google":
+    provider, model = full_model_name.split(":", 1)
+    match provider:
+        case "google":
             if api_key is None:
                 client = GoogleLLMClient(model, decorator_configs=decorator_configs, default_max_tokens=default_max_tokens)
             else:
                 client = GoogleLLMClient(model, api_key, decorator_configs=decorator_configs, default_max_tokens=default_max_tokens)
-        elif provider == "anthropic":
+        case "anthropic":
             if api_key is None:
                 client = AnthropicLLMClient(model, decorator_configs=decorator_configs, default_max_tokens=default_max_tokens)
             else:
                 client = AnthropicLLMClient(model, api_key, decorator_configs=decorator_configs, default_max_tokens=default_max_tokens)
-        elif provider == "openai":
+        case "openai":
             if api_key is None:
                 client = OpenaiLLMClient(model, decorator_configs=decorator_configs, default_max_tokens=default_max_tokens)
             else:
                 client = OpenaiLLMClient(model, api_key, decorator_configs=decorator_configs, default_max_tokens=default_max_tokens)
-        elif provider == "bedrock":
-            client = BedrockLLMClient(model, decorator_configs=decorator_configs, default_max_tokens=default_max_tokens)
-        else:
+        case "bedrock":
+            if api_key is None:
+                client = BedrockLLMClient(model, decorator_configs=decorator_configs, default_max_tokens=default_max_tokens)
+            else:
+                client = BedrockLLMClient(model, api_key, decorator_configs=decorator_configs, default_max_tokens=default_max_tokens)
+        case _:
             if api_key is None:
                 raise ValueError(f"You should directly provide api_key for this provider: {provider}")
             else:
                 client = AiSuiteLLMClient(full_model_name, api_key, decorator_configs=decorator_configs, default_max_tokens=default_max_tokens)
-                
-        _memory[full_model_name] = client
-        return _memory[full_model_name]
-    else:
-        client = _memory[full_model_name]
+    
+    if (full_model_name, client.api_key) in _memory:
+        client = _memory[(full_model_name, client.api_key)]
         if decorator_configs is not None:
             client._decorator_configs = decorator_configs
         if default_max_tokens is not None:
             client.default_max_tokens = default_max_tokens
+        return client
+    else:
+        _memory[(full_model_name, client.api_key)] = client
         return client
 
 
 def get_async_client(full_model_name: str, api_key: str | None = None, decorator_configs: DecoratorConfigs | None = None, default_max_tokens: int | None = None) -> BaseLLMClientAsync:
     global _memory_async
     
-    if full_model_name not in _memory_async:
-        provider, model = full_model_name.split(":", 1)
-        if provider == "google":
+    
+    provider, model = full_model_name.split(":", 1)
+    match provider:
+        case "google":
             if api_key is None:
                 client = GoogleLLMClientAsync(model, decorator_configs=decorator_configs, default_max_tokens=default_max_tokens)
             else:
                 client = GoogleLLMClientAsync(model, api_key, decorator_configs=decorator_configs, default_max_tokens=default_max_tokens)
-        elif provider == "anthropic":
+        case "anthropic":
             if api_key is None:
                 client = AnthropicLLMClientAsync(model, decorator_configs=decorator_configs, default_max_tokens=default_max_tokens)
             else:
                 client = AnthropicLLMClientAsync(model, api_key, decorator_configs=decorator_configs, default_max_tokens=default_max_tokens)
-        elif provider == "openai":
+        case "openai":
             if api_key is None:
                 client = OpenaiLLMClientAsync(model, decorator_configs=decorator_configs, default_max_tokens=default_max_tokens)
             else:
                 client = OpenaiLLMClientAsync(model, api_key, decorator_configs=decorator_configs, default_max_tokens=default_max_tokens)
-        elif provider == "bedrock":
-            client = BedrockLLMClientAsync(model, decorator_configs=decorator_configs, default_max_tokens=default_max_tokens)
-        else:
+        case "bedrock":
+            if api_key is None:
+                client = BedrockLLMClientAsync(model, decorator_configs=decorator_configs, default_max_tokens=default_max_tokens)
+            else:
+                client = BedrockLLMClientAsync(model, api_key, decorator_configs=decorator_configs, default_max_tokens=default_max_tokens)
+        case _:
             if api_key is None:
                 raise ValueError(f"You should directly provide api_key for this provider: {provider}")
             else:
                 client = AiSuiteLLMClientAsync(full_model_name, api_key, decorator_configs=decorator_configs, default_max_tokens=default_max_tokens)
         
-        _memory_async[full_model_name] = client
-        return _memory_async[full_model_name]
-    else:
-        client = _memory_async[full_model_name]
+    if (full_model_name, client.api_key) in _memory_async:
+        client = _memory_async[(full_model_name, client.api_key)]
         if decorator_configs is not None:
             client._decorator_configs = decorator_configs
         if default_max_tokens is not None:
             client.default_max_tokens = default_max_tokens
+        return client
+    else:
+        _memory_async[(full_model_name, client.api_key)] = client
         return client
 
 
