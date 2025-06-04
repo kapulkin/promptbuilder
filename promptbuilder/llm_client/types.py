@@ -102,14 +102,6 @@ class Response(BaseModel):
         text = ""
         any_text_part_text = False
         for part in self.candidates[0].content.parts:
-            for field_name, field_value in part.model_dump(
-                exclude={"text", "thought"}
-            ).items():
-                if field_value is not None:
-                    raise ValueError(
-                        "GenerateContentResponse.text only supports text parts, but got"
-                        f" {field_name} part{part}"
-                    )
             if isinstance(part.text, str):
                 if isinstance(part.thought, bool) and part.thought:
                     continue

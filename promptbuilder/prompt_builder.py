@@ -1,4 +1,4 @@
-from typing import Type, Union, Literal, get_origin, get_args, Dict, Any
+from typing import Type, Union, Literal, get_origin, get_args, Self
 from types import UnionType
 from pydantic import Field, BaseModel
 from pydantic_core import PydanticUndefined
@@ -23,37 +23,37 @@ class PromptBuilder:
         self.prompt_template = ""
         self.variables = []
 
-    def tag_variable(self, tag_name: str, variable_name: str, description: str | None = None):
+    def tag_variable(self, tag_name: str, variable_name: str, description: str | None = None) -> Self:
         if description:
             self.prompt_template += f"{description}\n"
         self.prompt_template += f"<{tag_name}>\n{{{variable_name}}}\n</{tag_name}>\n"
         self.variables.append(variable_name)
         return self
 
-    def tag_content(self, tag_name: str, content: str, description: str | None = None):
+    def tag_content(self, tag_name: str, content: str, description: str | None = None) -> Self:
         if description:
             self.prompt_template += f"{description}\n"
         self.prompt_template += f"<{tag_name}>\n{content}\n</{tag_name}>\n"
         return self
     
-    def text(self, text: str):
+    def text(self, text: str) -> Self:
         self.prompt_template += text
         return self
 
-    def header(self, header: str, level: int = 2):
+    def header(self, header: str, level: int = 2) -> Self:
         self.prompt_template += f"\n{'#' * level} {header}\n"
         return self
 
-    def variable(self, variable_name: str):
+    def variable(self, variable_name: str) -> Self:
         self.prompt_template += f"{{{variable_name}}}"
         self.variables.append(variable_name)
         return self
 
-    def paragraph(self, text: str):
+    def paragraph(self, text: str) -> Self:
         self.prompt_template += f"{text}\n"
         return self
 
-    def structure(self, type: Type, description: str | None = None):
+    def structure(self, type: Type, description: str | None = None) -> Self:
         if description:
             self.prompt_template += f"{description}\n"
         ts_type = schema_to_ts(type)
@@ -73,13 +73,13 @@ class PromptBuilder:
         self.prompt_template += ts_type.type
         return self
     
-    def set_structured_output(self, type: Type, output_name: str = "result"):
+    def set_structured_output(self, type: Type, output_name: str = "result") -> Self:
         """
         Set structured output for the prompt.
 
         Use create_model from pydantic to define the structure on the fly.
 
-        Exmaple:
+        Example:
         builder.set_structured_output(type=create_model(
             "TodoList",
             todo_items=(List[create_model(

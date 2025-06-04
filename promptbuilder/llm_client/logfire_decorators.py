@@ -42,6 +42,18 @@ def extract_span_data(self, *args, **kwargs) -> dict[str, Any]:
     
     return span_data
 
+def extract_response_data(response: Response) -> dict[str, Any]:
+    response_data = {"message": {"role": "assistant"}}
+    if response.text is not None:
+        response_data["message"]["content"] = response.text
+    tool_calls = []
+    for part in response.candidates[0].content.parts:
+        if part.function_call is not None:
+            tool_calls.append({"function": {"name": part.function_call.name, "arguments": part.function_call.args}})
+    if len(tool_calls) > 0:
+        response_data["message"]["tool_calls"] = tool_calls
+    return response_data
+
 
 @inherited_decorator
 def create(class_method: Callable[P, Response]) -> Callable[P, Response]:
@@ -60,7 +72,7 @@ def create(class_method: Callable[P, Response]) -> Callable[P, Response]:
             response = class_method(self, *args, **kwargs)
             span.set_attribute("duration", time.time() - start_time)
             
-            span.set_attribute("response_data", {"message": {"role": "assistant", "content": response.text}})
+            span.set_attribute("response_data", extract_response_data(response))
             span.set_attribute("candidates", response.candidates)
             span.set_attribute("parsed", response.parsed)
             span.set_attribute("response_text", response.text)
@@ -92,7 +104,7 @@ def create_async(class_method: Callable[P, Awaitable[Response]]) -> Callable[P, 
             response = await class_method(self, *args, **kwargs)
             span.set_attribute("duration", time.time() - start_time)
             
-            span.set_attribute("response_data", {"message": {"role": "assistant", "content": response.text}})
+            span.set_attribute("response_data", extract_response_data(response))
             span.set_attribute("candidates", response.candidates)
             span.set_attribute("parsed", response.parsed)
             span.set_attribute("response_text", response.text)
