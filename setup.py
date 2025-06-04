@@ -2,11 +2,11 @@ from setuptools import setup, find_packages
 
 setup(
     name="promptbuilder",
-    version="0.4.5",
+    version="0.4.6",
     packages=find_packages(),
     install_requires=[
         "pydantic",
-        "aisuite",
+        "aisuite-async",
     ],
     author="Kapulkin Stanislav",
     author_email="kapulkin@gmail.com",

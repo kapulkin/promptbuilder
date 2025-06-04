@@ -5,3 +5,4 @@ pytest
 google-genai
 anthropic
 openai
+aioboto3

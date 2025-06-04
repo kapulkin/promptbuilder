@@ -478,6 +478,10 @@ class BaseLLMClientAsync(ABC, utils.InheritDecoratorsMixin):
 
 
 class CachedLLMClient(BaseLLMClient):
+    @property
+    def api_key(self) -> ApiKey:
+        return self.llm_client.api_key
+
     def __init__(self, llm_client: BaseLLMClient, cache_dir: str = "data/llm_cache"):
         super().__init__(provider=llm_client.provider, model=llm_client.model, decorator_configs=llm_client._decorator_configs, default_max_tokens=llm_client.default_max_tokens)
         self.provider = llm_client.provider
@@ -519,6 +523,10 @@ class CachedLLMClient(BaseLLMClient):
 
 
 class CachedLLMClientAsync(BaseLLMClientAsync):
+    @property
+    def api_key(self) -> ApiKey:
+        return self.llm_client.api_key
+
     def __init__(self, llm_client: BaseLLMClientAsync, cache_dir: str = "data/llm_cache"):
         super().__init__(provider=llm_client.provider, model=llm_client.model, decorator_configs=llm_client._decorator_configs, default_max_tokens=llm_client.default_max_tokens)
         self.provider = llm_client.provider
