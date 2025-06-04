@@ -60,7 +60,7 @@ def get_client(full_model_name: str, api_key: ApiKey | None = None, decorator_co
         return client
 
 
-def get_async_client(full_model_name: str, api_key: str | None = None, decorator_configs: DecoratorConfigs | None = None, default_max_tokens: int | None = None) -> BaseLLMClientAsync:
+def get_async_client(full_model_name: str, api_key: ApiKey | None = None, decorator_configs: DecoratorConfigs | None = None, default_max_tokens: int | None = None) -> BaseLLMClientAsync:
     global _memory_async
     
     
