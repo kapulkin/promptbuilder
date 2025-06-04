@@ -44,8 +44,7 @@ def extract_span_data(self, *args, **kwargs) -> dict[str, Any]:
 
 def extract_response_data(response: Response) -> dict[str, Any]:
     response_data = {"message": {"role": "assistant"}}
-    if response.text is not None:
-        response_data["message"]["content"] = response.text
+    response_data["message"]["content"] = response.text
     tool_calls = []
     for part in response.candidates[0].content.parts:
         if part.function_call is not None:
