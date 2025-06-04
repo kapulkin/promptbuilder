@@ -7,6 +7,7 @@ from promptbuilder.llm_client.utils import DecoratorConfigs
 from promptbuilder.llm_client.google_client import GoogleLLMClient, GoogleLLMClientAsync
 from promptbuilder.llm_client.anthropic_client import AnthropicLLMClient, AnthropicLLMClientAsync
 from promptbuilder.llm_client.openai_client import OpenaiLLMClient, OpenaiLLMClientAsync
+from promptbuilder.llm_client.bedrock_client import BedrockLLMClient, BedrockLLMClientAsync
 from promptbuilder.llm_client.aisuite_client import AiSuiteLLMClient, AiSuiteLLMClientAsync
 
 
@@ -18,7 +19,7 @@ def get_client(full_model_name: str, api_key: str | None = None, decorator_confi
     global _memory
     
     if full_model_name not in _memory:
-        provider, model = full_model_name.split(":")
+        provider, model = full_model_name.split(":", 1)
         if provider == "google":
             if api_key is None:
                 client = GoogleLLMClient(model, decorator_configs=decorator_configs, default_max_tokens=default_max_tokens)
@@ -34,6 +35,8 @@ def get_client(full_model_name: str, api_key: str | None = None, decorator_confi
                 client = OpenaiLLMClient(model, decorator_configs=decorator_configs, default_max_tokens=default_max_tokens)
             else:
                 client = OpenaiLLMClient(model, api_key, decorator_configs=decorator_configs, default_max_tokens=default_max_tokens)
+        elif provider == "bedrock":
+            client = BedrockLLMClient(model, decorator_configs=decorator_configs, default_max_tokens=default_max_tokens)
         else:
             if api_key is None:
                 raise ValueError(f"You should directly provide api_key for this provider: {provider}")
@@ -55,7 +58,7 @@ def get_async_client(full_model_name: str, api_key: str | None = None, decorator
     global _memory_async
     
     if full_model_name not in _memory_async:
-        provider, model = full_model_name.split(":")
+        provider, model = full_model_name.split(":", 1)
         if provider == "google":
             if api_key is None:
                 client = GoogleLLMClientAsync(model, decorator_configs=decorator_configs, default_max_tokens=default_max_tokens)
@@ -71,6 +74,8 @@ def get_async_client(full_model_name: str, api_key: str | None = None, decorator
                 client = OpenaiLLMClientAsync(model, decorator_configs=decorator_configs, default_max_tokens=default_max_tokens)
             else:
                 client = OpenaiLLMClientAsync(model, api_key, decorator_configs=decorator_configs, default_max_tokens=default_max_tokens)
+        elif provider == "bedrock":
+            client = BedrockLLMClientAsync(model, decorator_configs=decorator_configs, default_max_tokens=default_max_tokens)
         else:
             if api_key is None:
                 raise ValueError(f"You should directly provide api_key for this provider: {provider}")
