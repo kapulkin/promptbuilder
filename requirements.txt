@@ -1,7 +1,6 @@
 pydantic
-aisuite
-aisuite-async
 pytest
+aisuite-async
 google-genai
 anthropic
 openai
