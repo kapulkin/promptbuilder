@@ -94,7 +94,7 @@ class OpenaiLLMClient(BaseLLMClient):
     def _process_thinking_config(thinking_config: ThinkingConfig) -> dict[str, str]:
         openai_thinking_config = {}
         if thinking_config.include_thoughts:
-            openai_thinking_config["summary"] = "auto"
+            # openai_thinking_config["summary"] = "auto"
             match thinking_config.thinking_budget:
                 case 0 | None:
                     openai_thinking_config["reasoning"] = {"effort": "high"} # default
