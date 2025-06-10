@@ -1,5 +1,6 @@
 import os
 import json
+import base64
 from typing import AsyncIterator, Iterator
 
 from pydantic import BaseModel
@@ -67,31 +68,26 @@ class OpenaiLLMClient(BaseLLMClient):
             if message.parts is None:
                 openai_messages.append({"role": role, "content": message.as_str()})
             else:
+                content = []
                 for part in message.parts:
                     if part.inline_data is not None and part.inline_data.data is not None:
+                        base64_file_content = base64.b64encode(part.inline_data.data).decode('utf-8')
+                        file_data = {
+                            "file_data": f"data:{part.inline_data.mime_type};base64,{base64_file_content}"
+                        }
+                        if part.inline_data.display_name is not None:
+                            file_data["filename"] = part.inline_data.display_name
                         match part.inline_data.mime_type:
                             case "application/pdf":
-                                openai_messages.append({
-                                    "role": role,
-                                    "content": {
-                                        "type": "input_file",
-                                        "filename": part.inline_data.display_name,
-                                        "file_data": f"data:{part.inline_data.mime_type};base64,{part.inline_data.data.decode('utf-8')}"
-                                    }
-                                })
+                                file_data["type"] = "input_file"
                             case "image/png" | "image/jpeg" | "image/webp":
-                                openai_messages.append({
-                                    "role": role,
-                                    "content": {
-                                        "type": "input_image",
-                                        "filename": part.inline_data.display_name,
-                                        "file_data": f"data:{part.inline_data.mime_type};base64,{part.inline_data.data.decode('utf-8')}"
-                                    }
-                                })
+                                file_data["type"] = "input_image"
                             case _:
                                 raise ValueError(f"Unsupported inline data mime type: {part.inline_data.mime_type}. Supported types are: application/pdf, image/png, image/jpeg, image/webp.")
+                        content.append(file_data)
                     else:
-                        openai_messages.append({"role": role, "content": part.as_str()})     
+                        content.append({"type": "input_text", "text": part.as_str()})
+                openai_messages.append({"role": role, "content": content})
         return openai_messages
 
     @staticmethod
@@ -209,7 +205,7 @@ class OpenaiLLMClient(BaseLLMClient):
                         parts.append(Part(text=summary.text, thought=True))
                 elif output_item.type == "function_call":
                     parts.append(Part(function_call=FunctionCall(args=json.loads(output_item.arguments), name=output_item.name)))
-            parsed = self._as_json(text)
+            parsed = BaseLLMClient.as_json(text)
             
             return Response(
                 candidates=[Candidate(content=Content(parts=parts, role="model"))],
@@ -417,7 +413,7 @@ class OpenaiLLMClientAsync(BaseLLMClientAsync):
                         parts.append(Part(text=summary.text, thought=True))
                 elif output_item.type == "function_call":
                     parts.append(Part(function_call=FunctionCall(args=json.loads(output_item.arguments), name=output_item.name)))
-            parsed = self._as_json(text)
+            parsed = BaseLLMClient.as_json(text)
             
             return Response(
                 candidates=[Candidate(content=Content(parts=parts, role="model"))],

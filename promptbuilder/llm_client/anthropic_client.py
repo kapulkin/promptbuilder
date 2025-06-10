@@ -1,6 +1,6 @@
 import os
 from typing import AsyncIterator, Iterator
-
+import base64
 from pydantic import BaseModel
 from anthropic import Anthropic, AsyncAnthropic, Stream, AsyncStream
 from anthropic.types import RawMessageStreamEvent
@@ -133,6 +133,7 @@ class AnthropicLLMClient(BaseLLMClient):
             if message.parts is None:
                 anthropic_messages.append({"role": role, "content": message.as_str()})
             else:
+                content = []
                 for part in message.parts:
                     if part.inline_data is not None and part.inline_data.data is not None:                        
                         match part.inline_data.mime_type:
@@ -143,19 +144,21 @@ class AnthropicLLMClient(BaseLLMClient):
                             case _:
                                 raise ValueError(f"Unsupported data mime type: {part.inline_data.mime_type}")
 
-                        anthropic_messages.append({
-                            "role": role,
-                            "content": {
-                                "type": data_type,
-                                "source": {
-                                    "type": "base64",
-                                    "media_type": part.inline_data.mime_type,
-                                    "data": part.inline_data.data.decode("utf-8"),
-                                }
+                        base64_file_content = base64.b64encode(part.inline_data.data).decode('utf-8')
+                        content.append({
+                            "type": data_type,
+                            "source": {
+                                "type": "base64",
+                                "media_type": part.inline_data.mime_type,
+                                "data": base64_file_content,
                             }
                         })
                     else:
-                        anthropic_messages.append({"role": role, "content": part.as_str()})
+                        content.append({
+                            "type": "text",
+                            "text": part.as_str()
+                        })
+                anthropic_messages.append({"role": role, "content": content})
         return anthropic_messages
 
     def create(
@@ -253,7 +256,7 @@ class AnthropicLLMClient(BaseLLMClient):
                     parts.append(Part(text=content.text))
                 elif content.type == "tool_use":
                     parts.append(Part(function_call=FunctionCall(args=content.input, name=content.name)))
-            parsed = self._as_json(text)
+            parsed = BaseLLMClient.as_json(text)
             
             return Response(
                 candidates=[Candidate(content=Content(parts=parts, role="model"))],
@@ -279,7 +282,7 @@ class AnthropicLLMClient(BaseLLMClient):
                     parts.append(Part(text=content.text))
                 elif content.type == "tool_use":
                     parts.append(Part(function_call=FunctionCall(args=content.input, name=content.name)))
-            parsed = self._as_json(text)
+            parsed = BaseLLMClient.as_json(text)
             parsed_pydantic = result_type.model_construct(**parsed)
             
             return Response(
@@ -480,7 +483,7 @@ class AnthropicLLMClientAsync(BaseLLMClientAsync):
                     parts.append(Part(text=content.text))
                 elif content.type == "tool_use":
                     parts.append(Part(function_call=FunctionCall(args=content.input, name=content.name)))
-            parsed = self._as_json(text)
+            parsed = BaseLLMClient.as_json(text)
             
             return Response(
                 candidates=[Candidate(content=Content(parts=parts, role="model"))],
@@ -506,7 +509,7 @@ class AnthropicLLMClientAsync(BaseLLMClientAsync):
                     parts.append(Part(text=content.text))
                 elif content.type == "tool_use":
                     parts.append(Part(function_call=FunctionCall(args=content.input, name=content.name)))
-            parsed = self._as_json(text)
+            parsed = BaseLLMClient.as_json(text)
             parsed_pydantic = result_type.model_construct(**parsed)
             
             return Response(

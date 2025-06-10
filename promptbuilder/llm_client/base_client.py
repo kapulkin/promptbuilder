@@ -6,7 +6,7 @@ import logging
 from abc import ABC, abstractmethod
 from typing import Iterator, AsyncIterator, Literal, overload
 
-from promptbuilder.llm_client.types import Response, Content, Part, Tool, ToolConfig, FunctionCall, FunctionCallingConfig, Json, ThinkingConfig, ApiKey, PydanticStructure
+from promptbuilder.llm_client.types import Response, Content, Part, Tool, ToolConfig, FunctionCall, FunctionCallingConfig, Json, ThinkingConfig, ApiKey, PydanticStructure, FinishReason
 import promptbuilder.llm_client.utils as utils
 import promptbuilder.llm_client.logfire_decorators as logfire_decorators
 from promptbuilder.llm_client.config import GLOBAL_CONFIG
@@ -46,7 +46,8 @@ class BaseLLMClient(ABC, utils.InheritDecoratorsMixin):
         """Return the model identifier"""
         return self.provider + ":" + self.model
     
-    def _as_json(self, text: str) -> Json:
+    @staticmethod
+    def as_json(text: str) -> Json:
         # Remove markdown code block formatting if present
         text = text.strip()
                 
@@ -138,6 +139,7 @@ class BaseLLMClient(ABC, utils.InheritDecoratorsMixin):
         max_tokens: int | None = None,
         tools: list[Tool] | None = None,
         tool_choice_mode: Literal["ANY", "NONE"] = "NONE",
+        autocomplete: bool = False
     ):
         if result_type == "tools":
             response = self.create(
@@ -165,11 +167,57 @@ class BaseLLMClient(ABC, utils.InheritDecoratorsMixin):
             tools=tools,
             tool_config=ToolConfig(function_calling_config=FunctionCallingConfig(mode=tool_choice_mode)),
         )
+
+        while autocomplete and response.candidates and response.candidates[0].finish_reason in [FinishReason.STOP, FinishReason.MAX_TOKENS]:
+            BaseLLMClient._append_generated_part(messages, response)
+
+            response = self.create(
+                messages=messages,
+                result_type=result_type,
+                thinking_config=thinking_config,
+                system_message=system_message,
+                max_tokens=max_tokens,
+                tools=tools,
+                tool_config=ToolConfig(function_calling_config=FunctionCallingConfig(mode=tool_choice_mode)),
+            )
+
         if result_type is None:
             return response.text
         else:
             return response.parsed
     
+
+    @staticmethod
+    def _append_generated_part(messages: list[Content], response: Response):
+        assert(response.candidates and response.candidates[0].content), "Response must contain at least one candidate with content."
+
+        text_parts = [
+            part for part in response.candidates[0].content.parts if part.text is not None and not part.thought
+        ] if response.candidates[0].content and response.candidates[0].content.parts else None
+        if text_parts is not None and len(text_parts) > 0:
+            response_text = "".join(part.text for part in text_parts)
+            is_thought = False
+        else:
+            thought_parts = [
+                part for part in response.candidates[0].content.parts if part.text and part.thought
+            ] if response.candidates[0].content and response.candidates[0].content.parts else None
+            if thought_parts is not None and len(thought_parts) > 0:
+                response_text = "".join(part.text for part in thought_parts)
+                is_thought = True
+            else:
+                raise ValueError("No text or thought found in the response parts.")
+        
+        if len(messages) > 0 and messages[-1].role == "model":
+            message_to_append = messages[-1]
+            if message_to_append.parts and message_to_append.parts[-1].text is not None and message_to_append.parts[-1].thought == is_thought:
+                message_to_append.parts[-1].text += response_text
+            else:
+                if not message_to_append.parts:
+                    message_to_append.parts = []
+                message_to_append.parts.append(Part(text=response_text, thought=is_thought))
+        else:
+            messages.append(Content(parts=[Part(text=response_text, thought=is_thought)], role="model"))
+
     @logfire_decorators.create_stream
     @utils.retry_cls
     @utils.rpm_limit_cls
@@ -276,22 +324,6 @@ class BaseLLMClientAsync(ABC, utils.InheritDecoratorsMixin):
         """Return the model identifier"""
         return self.provider + ":" + self.model
     
-    def _as_json(self, text: str) -> Json:
-        # Remove markdown code block formatting if present
-        text = text.strip()
-                
-        code_block_pattern = r"```(?:json\s)?(.*)```"
-        match = re.search(code_block_pattern, text, re.DOTALL)
-        
-        if match:
-            # Use the content inside code blocks
-            text = match.group(1).strip()
-
-        try:
-            return json.loads(text, strict=False)
-        except json.JSONDecodeError as e:
-            raise ValueError(f"Failed to parse LLM response as JSON:\n{text}")
-
     @logfire_decorators.create_async
     @utils.retry_cls_async
     @utils.rpm_limit_cls_async
@@ -368,6 +400,7 @@ class BaseLLMClientAsync(ABC, utils.InheritDecoratorsMixin):
         max_tokens: int | None = None,
         tools: list[Tool] | None = None,
         tool_choice_mode: Literal["ANY", "NONE"] = "NONE",
+        autocomplete: bool = False
     ):
         if result_type == "tools":
             response = await self.create(
@@ -395,6 +428,23 @@ class BaseLLMClientAsync(ABC, utils.InheritDecoratorsMixin):
             tools=tools,
             tool_config=ToolConfig(function_calling_config=FunctionCallingConfig(mode=tool_choice_mode)),
         )
+
+        if max_tokens is None:
+            max_tokens = self.default_max_tokens
+
+        while autocomplete and response.candidates and response.candidates[0].finish_reason in [FinishReason.STOP, FinishReason.MAX_TOKENS]:
+            BaseLLMClient._append_generated_part(messages, response)
+
+            response = await self.create(
+                messages=messages,
+                result_type=result_type,
+                thinking_config=thinking_config,
+                system_message=system_message,
+                max_tokens=max_tokens,
+                tools=tools,
+                tool_config=ToolConfig(function_calling_config=FunctionCallingConfig(mode=tool_choice_mode)),
+            )
+
         if result_type is None:
             return response.text
         else:

@@ -52,7 +52,7 @@ class GoogleLLMClient(BaseLLMClient):
         
         if not thinking_config.include_thoughts:
             thinking_config = ThinkingConfig(include_thoughts=False, thinking_budget=0)
-        if thinking_config.include_thoughts or "gemini-2.5" in self.model:
+        if thinking_config.include_thoughts or "gemini-2.5-pro-preview-05-06" in self.model:
             config.thinking_config = thinking_config
         
         if result_type is None:
@@ -67,7 +67,7 @@ class GoogleLLMClient(BaseLLMClient):
                 contents=messages,
                 config=config,
             )
-            response.parsed = self._as_json(response.text)
+            response.parsed = BaseLLMClient.as_json(response.text)
             return response
         elif isinstance(result_type, type(BaseModel)):
             config.response_mime_type = "application/json"
@@ -77,6 +77,8 @@ class GoogleLLMClient(BaseLLMClient):
                 contents=messages,
                 config=config,
             )
+        else:
+            raise ValueError(f"Unsupported result_type: {result_type}. Supported types are: None, 'json', or a Pydantic model.")
         
     def create_stream(
         self,
@@ -158,7 +160,7 @@ class GoogleLLMClientAsync(BaseLLMClientAsync):
                 contents=messages,
                 config=config,
             )
-            response.parsed = self._as_json(response.text)
+            response.parsed = BaseLLMClient.as_json(response.text)
             return response
         elif isinstance(result_type, type(BaseModel)):
             config.response_mime_type = "application/json"
@@ -168,6 +170,8 @@ class GoogleLLMClientAsync(BaseLLMClientAsync):
                 contents=messages,
                 config=config,
             )
+        else:
+            raise ValueError(f"Unsupported result_type: {result_type}. Supported types are: None, 'json', or a Pydantic model.")
         
     async def create_stream(
         self,

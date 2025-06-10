@@ -183,7 +183,7 @@ class BedrockLLMClient(BaseLLMClient):
                         args=output_item["toolUse"]["input"],
                         name=output_item["toolUse"]["name"],
                     )))
-            parsed = self._as_json(text)
+            parsed = BaseLLMClient.as_json(text)
             
             return Response(
                 candidates=[Candidate(content=Content(parts=parts, role="model"))],
@@ -213,7 +213,7 @@ class BedrockLLMClient(BaseLLMClient):
                         args=output_item["toolUse"]["input"],
                         name=output_item["toolUse"]["name"],
                     )))
-            parsed = self._as_json(text)
+            parsed = BaseLLMClient.as_json(text)
             parsed_pydantic = result_type.model_construct(**parsed)
             
             return Response(
@@ -429,7 +429,7 @@ class BedrockLLMClientAsync(BaseLLMClientAsync):
                             args=output_item["toolUse"]["input"],
                             name=output_item["toolUse"]["name"],
                         )))
-                parsed = self._as_json(text)
+                parsed = BaseLLMClient.as_json(text)
                 
                 return Response(
                     candidates=[Candidate(content=Content(parts=parts, role="model"))],
@@ -459,7 +459,7 @@ class BedrockLLMClientAsync(BaseLLMClientAsync):
                             args=output_item["toolUse"]["input"],
                             name=output_item["toolUse"]["name"],
                         )))
-                parsed = self._as_json(text)
+                parsed = BaseLLMClient.as_json(text)
                 parsed_pydantic = result_type.model_construct(**parsed)
                 
                 return Response(

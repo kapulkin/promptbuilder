@@ -84,10 +84,8 @@ class AgentRouter(Agent[MessageType, ContextType]):
         
         for part in content.parts:
             if part.function_call is None:
-                if part.thought is not None:
-                    self.context.dialog_history.add_message(Content(parts=[Part(thought=part.thought)], role="model"))
                 if part.text is not None:
-                    self.context.dialog_history.add_message(Content(parts=[Part(text=part.text)], role="model"))
+                    self.context.dialog_history.add_message(Content(parts=[Part(text=part.text, thought=part.thought)], role="model"))
             else:
                 tr_name = part.function_call.name
                 args = part.function_call.args

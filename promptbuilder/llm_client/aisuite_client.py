@@ -151,7 +151,7 @@ class AiSuiteLLMClient(BaseLLMClient):
                 if choice.message.content is not None:
                     text += choice.message.content + "\n"
                     parts.append(Part(text=choice.message.content))
-            parsed = self._as_json(text)
+            parsed = BaseLLMClient.as_json(text)
             
             return Response(
                 candidates=[Candidate(content=Content(
@@ -178,7 +178,7 @@ class AiSuiteLLMClient(BaseLLMClient):
                 if choice.message.content is not None:
                     text += choice.message.content + "\n"
                     parts.append(Part(text=choice.message.content))
-            parsed = self._as_json(text)
+            parsed = BaseLLMClient.as_json(text)
             parsed_pydantic = result_type.model_construct(**parsed)
             
             return Response(
@@ -333,7 +333,7 @@ class AiSuiteLLMClientAsync(BaseLLMClientAsync):
                 if choice.message.content is not None:
                     text += choice.message.content + "\n"
                     parts.append(Part(text=choice.message.content))
-            parsed = self._as_json(text)
+            parsed = BaseLLMClient.as_json(text)
             
             return Response(
                 candidates=[Candidate(content=Content(
@@ -360,7 +360,7 @@ class AiSuiteLLMClientAsync(BaseLLMClientAsync):
                 if choice.message.content is not None:
                     text += choice.message.content + "\n"
                     parts.append(Part(text=choice.message.content))
-            parsed = self._as_json(text)
+            parsed = BaseLLMClient.as_json(text)
             parsed_pydantic = result_type.model_construct(**parsed)
             
             return Response(
