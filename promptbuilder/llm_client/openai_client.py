@@ -57,7 +57,8 @@ class OpenaiLLMClient(BaseLLMClient):
     def api_key(self) -> str:
         return self._api_key
     
-    def _content_to_openai_messages(self, messages: list[Content], system_message: str | None = None) -> list[MessageDict]:
+    @staticmethod
+    def _content_to_openai_messages(messages: list[Content], system_message: str | None = None) -> list[MessageDict]:
         openai_messages: list[MessageDict] = []
         if system_message is not None:
             openai_messages.append({"role": "developer", "content": system_message})
@@ -93,6 +94,24 @@ class OpenaiLLMClient(BaseLLMClient):
                         openai_messages.append({"role": role, "content": part.as_str()})     
         return openai_messages
 
+    @staticmethod
+    def _process_thinking_config(thinking_config: ThinkingConfig) -> dict[str, str]:
+        openai_thinking_config = {}
+        if thinking_config.include_thoughts:
+            openai_thinking_config["summary"] = "auto"
+            match thinking_config.thinking_budget:
+                case 0 | None:
+                    openai_thinking_config["reasoning"] = {"effort": "high"} # default
+                case 1:
+                    openai_thinking_config["reasoning"] = {"effort": "low"}
+                case 2:
+                    openai_thinking_config["reasoning"] = {"effort": "medium"}
+                case 3:
+                    openai_thinking_config["reasoning"] = {"effort": "high"}
+                case _:
+                    openai_thinking_config["reasoning"] = {"effort": "high"}
+        return openai_thinking_config
+
     def create(
         self,
         messages: list[Content],
@@ -104,7 +123,7 @@ class OpenaiLLMClient(BaseLLMClient):
         tools: list[Tool] | None = None,
         tool_config: ToolConfig = ToolConfig(),
     ) -> Response:
-        openai_messages: list[MessageDict] = self._content_to_openai_messages(messages, system_message)
+        openai_messages: list[MessageDict] = OpenaiLLMClient._content_to_openai_messages(messages, system_message)
         
         if max_tokens is None:
             max_tokens = self.default_max_tokens
@@ -115,10 +134,8 @@ class OpenaiLLMClient(BaseLLMClient):
             "input": openai_messages,
         }
         
-        if thinking_config.include_thoughts:
-            openai_kwargs["reasoning"] = {"effort": "medium"}
-            # openai_kwargs["reasoning"]["summary"] = "auto"
-        
+        openai_kwargs.update(OpenaiLLMClient._process_thinking_config(thinking_config))
+
         if tools is not None:
             openai_kwargs["parallel_tool_calls"] = True
             
@@ -237,7 +254,7 @@ class OpenaiLLMClient(BaseLLMClient):
         system_message: str | None = None,
         max_tokens: int | None = None,
     ) -> Iterator[Response]:
-        openai_messages = self._content_to_openai_messages(messages, system_message)
+        openai_messages = OpenaiLLMClient._content_to_openai_messages(messages, system_message)
         
         if max_tokens is None:
             max_tokens = self.default_max_tokens
@@ -307,7 +324,7 @@ class OpenaiLLMClientAsync(BaseLLMClientAsync):
         tools: list[Tool] | None = None,
         tool_config: ToolConfig = ToolConfig(),
     ) -> Response:
-        openai_messages: list[dict[str, str]] = []
+        openai_messages = OpenaiLLMClient._content_to_openai_messages(messages, system_message)
         if system_message is not None:
             openai_messages.append({"role": "developer", "content": system_message})
         for message in messages:
@@ -325,9 +342,7 @@ class OpenaiLLMClientAsync(BaseLLMClientAsync):
             "input": openai_messages,
         }
         
-        if thinking_config.include_thoughts:
-            openai_kwargs["reasoning"] = {"effort": "medium"}
-            openai_kwargs["reasoning"]["summary"] = "auto"
+        openai_kwargs.update(OpenaiLLMClient._process_thinking_config(thinking_config))
         
         if tools is not None:
             openai_kwargs["parallel_tool_calls"] = True
@@ -445,7 +460,7 @@ class OpenaiLLMClientAsync(BaseLLMClientAsync):
         system_message: str | None = None,
         max_tokens: int | None = None,
     ) -> AsyncIterator[Response]:
-        openai_messages: list[dict[str, str]] = []
+        openai_messages = OpenaiLLMClient._content_to_openai_messages(messages, system_message)
         if system_message is not None:
             openai_messages.append({"role": "developer", "content": system_message})
         for message in messages:
