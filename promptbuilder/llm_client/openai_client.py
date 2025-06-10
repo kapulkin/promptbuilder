@@ -7,7 +7,7 @@ from openai import OpenAI, AsyncOpenAI, Stream, AsyncStream
 from openai.types.responses import ResponseStreamEvent
 
 from promptbuilder.llm_client.base_client import BaseLLMClient, BaseLLMClientAsync, ResultType
-from promptbuilder.llm_client.types import Response, Content, Candidate, UsageMetadata, Part, ThinkingConfig, Tool, ToolConfig, FunctionCall
+from promptbuilder.llm_client.types import Response, Content, Candidate, UsageMetadata, Part, ThinkingConfig, Tool, ToolConfig, FunctionCall, MessageDict
 from promptbuilder.llm_client.config import DecoratorConfigs
 
 
@@ -57,6 +57,42 @@ class OpenaiLLMClient(BaseLLMClient):
     def api_key(self) -> str:
         return self._api_key
     
+    def _content_to_openai_messages(self, messages: list[Content], system_message: str | None = None) -> list[MessageDict]:
+        openai_messages: list[MessageDict] = []
+        if system_message is not None:
+            openai_messages.append({"role": "developer", "content": system_message})
+        for message in messages:
+            role = "user" if message.role == "user" else "assistant"
+            if message.parts is None:
+                openai_messages.append({"role": role, "content": message.as_str()})
+            else:
+                for part in message.parts:
+                    if part.inline_data is not None and part.inline_data.data is not None:
+                        match part.inline_data.mime_type:
+                            case "application/pdf":
+                                openai_messages.append({
+                                    "role": role,
+                                    "content": {
+                                        "type": "input_file",
+                                        "filename": part.inline_data.display_name,
+                                        "file_data": f"data:{part.inline_data.mime_type};base64,{part.inline_data.data.decode('utf-8')}"
+                                    }
+                                })
+                            case "image/png" | "image/jpeg" | "image/webp":
+                                openai_messages.append({
+                                    "role": role,
+                                    "content": {
+                                        "type": "input_image",
+                                        "filename": part.inline_data.display_name,
+                                        "file_data": f"data:{part.inline_data.mime_type};base64,{part.inline_data.data.decode('utf-8')}"
+                                    }
+                                })
+                            case _:
+                                raise ValueError(f"Unsupported inline data mime type: {part.inline_data.mime_type}. Supported types are: application/pdf, image/png, image/jpeg, image/webp.")
+                    else:
+                        openai_messages.append({"role": role, "content": part.as_str()})     
+        return openai_messages
+
     def create(
         self,
         messages: list[Content],
@@ -68,14 +104,7 @@ class OpenaiLLMClient(BaseLLMClient):
         tools: list[Tool] | None = None,
         tool_config: ToolConfig = ToolConfig(),
     ) -> Response:
-        openai_messages: list[dict[str, str]] = []
-        if system_message is not None:
-            openai_messages.append({"role": "developer", "content": system_message})
-        for message in messages:
-            if message.role == "user":
-                openai_messages.append({"role": "user", "content": message.as_str()})
-            elif message.role == "model":
-                openai_messages.append({"role": "assistant", "content": message.as_str()})
+        openai_messages: list[MessageDict] = self._content_to_openai_messages(messages, system_message)
         
         if max_tokens is None:
             max_tokens = self.default_max_tokens
@@ -198,6 +227,8 @@ class OpenaiLLMClient(BaseLLMClient):
                 ),
                 parsed=parsed,
             )
+        else:
+            raise ValueError(f"Unsupported result type: {result_type}. Supported types are None, 'json', or a Pydantic model class.")
         
     def create_stream(
         self,
@@ -206,14 +237,7 @@ class OpenaiLLMClient(BaseLLMClient):
         system_message: str | None = None,
         max_tokens: int | None = None,
     ) -> Iterator[Response]:
-        openai_messages: list[dict[str, str]] = []
-        if system_message is not None:
-            openai_messages.append({"role": "developer", "content": system_message})
-        for message in messages:
-            if message.role == "user":
-                openai_messages.append({"role": "user", "content": message.as_str()})
-            elif message.role == "model":
-                openai_messages.append({"role": "assistant", "content": message.as_str()})
+        openai_messages = self._content_to_openai_messages(messages, system_message)
         
         if max_tokens is None:
             max_tokens = self.default_max_tokens

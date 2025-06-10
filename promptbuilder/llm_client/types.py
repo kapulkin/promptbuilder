@@ -21,9 +21,11 @@ class CustomApiKey(ABC):
 
 type ApiKey = str | CustomApiKey
 
+type MessageDict = dict[str, str | dict[str, Any] | None]
+
 class Message(BaseModel):
     role: str
-    content: str
+    content: str | dict[str, Any] | None = None
 
 class Choice(BaseModel):
     message: Message
@@ -47,16 +49,31 @@ class FunctionResponse(BaseModel):
     name: Optional[str] = None
     response: Optional[dict[str, Any]] = None
 
+class Blob(BaseModel):
+    display_name: Optional[str] = None
+    data: Optional[bytes] = None
+    mime_type: Optional[str] = None
+
+
 class Part(BaseModel):
     text: Optional[str] = None
     function_call: Optional[FunctionCall] = None
     function_response: Optional[FunctionResponse] = None
     thought: Optional[bool] = None
+    inline_data: Optional[Blob] = None
     
     def as_str(self) -> str:
         if self.text is not None:
             return self.text
         return ""
+
+    @classmethod
+    def from_bytes(cls, *, data: bytes, mime_type: str) -> 'Part':
+        inline_data = Blob(
+            data=data,
+            mime_type=mime_type,
+        )
+        return cls(inline_data=inline_data)
 
 class Content(BaseModel):
     parts: Optional[list[Part]] = None
