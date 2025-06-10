@@ -6,7 +6,7 @@ from anthropic import Anthropic, AsyncAnthropic, Stream, AsyncStream
 from anthropic.types import RawMessageStreamEvent
 
 from promptbuilder.llm_client.base_client import BaseLLMClient, BaseLLMClientAsync, ResultType
-from promptbuilder.llm_client.types import Response, Content, Candidate, UsageMetadata, Part, ThinkingConfig, Tool, ToolConfig, FunctionCall
+from promptbuilder.llm_client.types import Response, Content, Candidate, UsageMetadata, Part, ThinkingConfig, Tool, ToolConfig, FunctionCall, MessageDict
 from promptbuilder.llm_client.config import DecoratorConfigs
 from promptbuilder.prompt_builder import PromptBuilder
 
@@ -126,6 +126,38 @@ class AnthropicLLMClient(BaseLLMClient):
     def api_key(self) -> str:
         return self._api_key
     
+    def content_to_anthropic_messages(self, messages: list[Content]) -> list[MessageDict]:
+        anthropic_messages: list[MessageDict] = []
+        for message in messages:
+            role = "user" if message.role == "user" else "assistant"
+            if message.parts is None:
+                anthropic_messages.append({"role": role, "content": message.as_str()})
+            else:
+                for part in message.parts:
+                    if part.inline_data is not None and part.inline_data.data is not None:                        
+                        match part.inline_data.mime_type:
+                            case "application/pdf":
+                                data_type = "document"
+                            case "image/png" | "image/jpeg" | "image/webp":
+                                data_type = "image"
+                            case _:
+                                raise ValueError(f"Unsupported data mime type: {part.inline_data.mime_type}")
+
+                        anthropic_messages.append({
+                            "role": role,
+                            "content": {
+                                "type": data_type,
+                                "source": {
+                                    "type": "base64",
+                                    "media_type": part.inline_data.mime_type,
+                                    "data": part.inline_data.data.decode("utf-8"),
+                                }
+                            }
+                        })
+                    else:
+                        anthropic_messages.append({"role": role, "content": part.as_str()})
+        return anthropic_messages
+
     def create(
         self,
         messages: list[Content],
@@ -137,13 +169,7 @@ class AnthropicLLMClient(BaseLLMClient):
         tools: list[Tool] | None = None,
         tool_config: ToolConfig = ToolConfig(),
     ) -> Response:
-        anthropic_messages: list[dict[str, str]] = []
-        for message in messages:
-            if message.role == "user":
-                anthropic_messages.append({"role": "user", "content": message.as_str()})
-            elif message.role == "model":
-                anthropic_messages.append({"role": "assistant", "content": message.as_str()})
-        
+        anthropic_messages = self.content_to_anthropic_messages(messages)
         if max_tokens is None:
             if self.default_max_tokens is None:
                 max_tokens = self.default_max_tokens_strategy.for_create(self.model)
@@ -265,6 +291,8 @@ class AnthropicLLMClient(BaseLLMClient):
                 ),
                 parsed=parsed_pydantic,
             )
+        else:
+            raise ValueError(f"Unsupported result type: {result_type}")
     
     def create_stream(
         self,
@@ -273,12 +301,7 @@ class AnthropicLLMClient(BaseLLMClient):
         system_message: str | None = None,
         max_tokens: int | None = None,
     ) -> Iterator[Response]:
-        anthropic_messages: list[dict[str, str]] = []
-        for message in messages:
-            if message.role == "user":
-                anthropic_messages.append({"role": "user", "content": message.as_str()})
-            elif message.role == "model":
-                anthropic_messages.append({"role": "assistant", "content": message.as_str()})
+        anthropic_messages = self.content_to_anthropic_messages(messages)
         
         if max_tokens is None:
             if self.default_max_tokens is None:
