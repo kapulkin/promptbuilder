@@ -5,7 +5,7 @@ from pydantic import BaseModel
 from google.genai import Client, types
 
 from promptbuilder.llm_client.base_client import BaseLLMClient, BaseLLMClientAsync, ResultType
-from promptbuilder.llm_client.types import Response, Content, ThinkingConfig, Tool, ToolConfig
+from promptbuilder.llm_client.types import Response, Content, ThinkingConfig, Tool, ToolConfig, Model
 from promptbuilder.llm_client.config import DecoratorConfigs
 
 
@@ -98,6 +98,34 @@ class GoogleLLMClient(BaseLLMClient):
             config=config,
         )
         return response
+    
+    @staticmethod
+    def models_list() -> list[Model]:
+        models: list[Model] = []
+        client = Client()
+        for google_model in client.models.list():
+            for action in google_model.supported_actions:
+                if action == "generateContent":
+                    model_name = google_model.name
+                    if model_name.startswith("models/"):
+                        model_name = model_name[7:]
+                    
+                    if "tts" in model_name.lower():
+                        continue
+                    if "emb" in model_name.lower():
+                        continue
+                    if "image-generation" in model_name.lower():
+                        continue
+                    if "gemini" not in model_name.lower():
+                        continue
+                    
+                    models.append(Model(
+                        full_model_name=GoogleLLMClient.PROVIDER + ":" + model_name,
+                        model=model_name,
+                        provider=GoogleLLMClient.PROVIDER,
+                        display_name=google_model.display_name,
+                    ))
+        return models
 
 
 class GoogleLLMClientAsync(BaseLLMClientAsync):
@@ -189,3 +217,7 @@ class GoogleLLMClientAsync(BaseLLMClientAsync):
             config=config,
         )
         return response
+
+    @staticmethod
+    def models_list() -> list[Model]:
+        return GoogleLLMClient.models_list()

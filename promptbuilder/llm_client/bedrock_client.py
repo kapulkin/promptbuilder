@@ -7,7 +7,7 @@ from pydantic import BaseModel, ConfigDict
 from botocore.eventstream import EventStream
 
 from promptbuilder.llm_client.base_client import BaseLLMClient, BaseLLMClientAsync, ResultType
-from promptbuilder.llm_client.types import Response, Content, Candidate, UsageMetadata, Part, ThinkingConfig, Tool, ToolConfig, FunctionCall, CustomApiKey
+from promptbuilder.llm_client.types import Response, Content, Candidate, UsageMetadata, Part, ThinkingConfig, Tool, ToolConfig, FunctionCall, CustomApiKey, Model
 from promptbuilder.llm_client.config import DecoratorConfigs
 from promptbuilder.prompt_builder import PromptBuilder
 
@@ -261,7 +261,20 @@ class BedrockLLMClient(BaseLLMClient):
         )
         response = bedrock_runtime_client.converse_stream(**bedrock_kwargs)
         return BedrockStreamIterator(response["stream"])
-
+    
+    @staticmethod
+    def models_list() -> list[Model]:
+        models: list[Model] = []
+        bedrock_client = boto3.client("bedrock")
+        response = bedrock_client.list_inference_profiles(maxResults=256, typeEquals="SYSTEM_DEFINED")
+        for bedrock_model in response["inferenceProfileSummaries"]:
+            models.append(Model(
+                full_model_name=BedrockLLMClient.PROVIDER + ":" + bedrock_model["inferenceProfileArn"],
+                provider=BedrockLLMClient.PROVIDER,
+                model=bedrock_model["inferenceProfileArn"],
+                display_name=bedrock_model["inferenceProfileName"],
+            ))
+        return models
 
 class BedrockStreamIteratorAsync:
     def __init__(self, aioboto_session: aioboto3.Session, **bedrock_kwargs):
@@ -500,3 +513,7 @@ class BedrockLLMClientAsync(BaseLLMClientAsync):
         bedrock_kwargs["messages"] = bedrock_messages
         
         return BedrockStreamIteratorAsync(self._aioboto_session, **bedrock_kwargs)
+
+    @staticmethod
+    def models_list() -> list[Model]:
+        return BedrockLLMClient.models_list()

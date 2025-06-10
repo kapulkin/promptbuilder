@@ -7,7 +7,7 @@ from openai import OpenAI, AsyncOpenAI, Stream, AsyncStream
 from openai.types.responses import ResponseStreamEvent
 
 from promptbuilder.llm_client.base_client import BaseLLMClient, BaseLLMClientAsync, ResultType
-from promptbuilder.llm_client.types import Response, Content, Candidate, UsageMetadata, Part, ThinkingConfig, Tool, ToolConfig, FunctionCall, MessageDict
+from promptbuilder.llm_client.types import Response, Content, Candidate, UsageMetadata, Part, ThinkingConfig, Tool, ToolConfig, FunctionCall, MessageDict, Model
 from promptbuilder.llm_client.config import DecoratorConfigs
 
 
@@ -267,6 +267,32 @@ class OpenaiLLMClient(BaseLLMClient):
         response = self.client.responses.create(**openai_kwargs, stream=True)
         return OpenaiStreamIterator(response)
 
+    @staticmethod
+    def models_list() -> list[Model]:
+        models: list[Model] = []
+        client = OpenAI()
+        for openai_model in client.models.list():
+            model_name = openai_model.id
+            if "tts" in model_name or "whisper" in model_name:
+                continue
+            if "emb" in model_name:
+                continue
+            if "davinci" in model_name or "babbage" in model_name:
+                continue
+            if "image" in model_name or "dall" in model_name:
+                continue
+            if "moderation" in model_name:
+                continue
+            if "2024" in model_name or "2025" in model_name:
+                continue
+            
+            models.append(Model(
+                full_model_name=OpenaiLLMClient.PROVIDER + ":" + model_name,
+                model=model_name,
+                provider=OpenaiLLMClient.PROVIDER,
+            ))
+        return models
+
 
 class OpenaiStreamIteratorAsync:
     def __init__(self, openai_iterator: AsyncStream[ResponseStreamEvent]):
@@ -479,3 +505,7 @@ class OpenaiLLMClientAsync(BaseLLMClientAsync):
         }
         response = await self.client.responses.create(**openai_kwargs, stream=True)
         return OpenaiStreamIteratorAsync(response)
+
+    @staticmethod
+    def models_list() -> list[Model]:
+        return OpenaiLLMClient.models_list()
