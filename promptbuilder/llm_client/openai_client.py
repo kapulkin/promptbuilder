@@ -86,7 +86,8 @@ class OpenaiLLMClient(BaseLLMClient):
                                 raise ValueError(f"Unsupported inline data mime type: {part.inline_data.mime_type}. Supported types are: application/pdf, image/png, image/jpeg, image/webp.")
                         content.append(file_data)
                     else:
-                        content.append({"type": "input_text", "text": part.as_str()})
+                        text_type = "input_text" if message.role == "user" else "output_text"
+                        content.append({"type": text_type, "text": part.as_str()})
                 openai_messages.append({"role": role, "content": content})
         return openai_messages
 
