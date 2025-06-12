@@ -1,7 +1,7 @@
 import warnings
 from itertools import chain
 
-from promptbuilder.llm_client.types import ApiKey
+from promptbuilder.llm_client.types import ApiKey, Model
 from promptbuilder.llm_client.base_client import BaseLLMClient, BaseLLMClientAsync
 from promptbuilder.llm_client.config import GLOBAL_CONFIG
 from promptbuilder.llm_client.utils import DecoratorConfigs
@@ -102,6 +102,28 @@ def get_async_client(full_model_name: str, api_key: ApiKey | None = None, decora
     else:
         _memory_async[(full_model_name, client.api_key)] = client
         return client
+
+
+def get_models_list(provider: str | None = None) -> list[Model]:
+    if provider is None:
+        models_list: list[Model] = []
+        models_list += GoogleLLMClient.models_list()
+        models_list += AnthropicLLMClient.models_list()
+        models_list += OpenaiLLMClient.models_list()
+        models_list += BedrockLLMClient.models_list()
+        return models_list
+    
+    match provider:
+        case "google":
+            return GoogleLLMClient.models_list()
+        case "anthropic":
+            return AnthropicLLMClient.models_list()
+        case "openai":
+            return OpenaiLLMClient.models_list()
+        case "bedrock":
+            return BedrockLLMClient.models_list()
+        case _:
+            return []
 
 
 def configure(

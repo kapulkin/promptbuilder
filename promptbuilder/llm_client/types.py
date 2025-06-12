@@ -212,3 +212,9 @@ class FunctionCallingConfig(BaseModel):
 
 class ToolConfig(BaseModel):
     function_calling_config: Optional[FunctionCallingConfig] = None
+
+class Model(BaseModel):
+    full_model_name: str
+    provider: str
+    model: str
+    display_name: str | None = None

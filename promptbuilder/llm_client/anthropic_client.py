@@ -6,7 +6,7 @@ from anthropic import Anthropic, AsyncAnthropic, Stream, AsyncStream
 from anthropic.types import RawMessageStreamEvent
 
 from promptbuilder.llm_client.base_client import BaseLLMClient, BaseLLMClientAsync, ResultType
-from promptbuilder.llm_client.types import Response, Content, Candidate, UsageMetadata, Part, ThinkingConfig, Tool, ToolConfig, FunctionCall, MessageDict
+from promptbuilder.llm_client.types import Response, Content, Candidate, UsageMetadata, Part, ThinkingConfig, Tool, ToolConfig, FunctionCall, MessageDict, Model
 from promptbuilder.llm_client.config import DecoratorConfigs
 from promptbuilder.prompt_builder import PromptBuilder
 
@@ -325,6 +325,18 @@ class AnthropicLLMClient(BaseLLMClient):
         anthropic_iterator = self.client.messages.create(**anthropic_kwargs)
         return AnthropicStreamIterator(anthropic_iterator)
 
+    @staticmethod
+    def models_list() -> list[Model]:
+        models: list[Model] = []
+        client = Anthropic()
+        for anthropic_model in client.models.list(limit=100):
+            models.append(Model(
+                full_model_name=AnthropicLLMClient.PROVIDER + ":" + anthropic_model.id,
+                model=anthropic_model.id,
+                provider=AnthropicLLMClient.PROVIDER,
+                display_name=anthropic_model.display_name,
+            ))
+        return models
 
 class AnthropicStreamIteratorAsync:
     def __init__(self, anthropic_iterator: AsyncStream[RawMessageStreamEvent]):
@@ -554,3 +566,7 @@ class AnthropicLLMClientAsync(BaseLLMClientAsync):
         
         anthropic_iterator = await self.client.messages.create(**anthropic_kwargs)
         return AnthropicStreamIteratorAsync(anthropic_iterator)
+    
+    @staticmethod
+    def models_list() -> list[Model]:
+        return AnthropicLLMClient.models_list()
