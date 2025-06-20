@@ -115,7 +115,7 @@ class AiSuiteLLMClient(BaseLLMClient):
                         })
             aisuite_kwargs["tools"] = aisuite_tools
         
-        if result_type is None:
+        if result_type is None or result_type == "text":
             response = self.client.chat.completions.create(**aisuite_kwargs)
             
             parts: list[Part] = []
@@ -135,31 +135,6 @@ class AiSuiteLLMClient(BaseLLMClient):
                     role=self._external_role(choice.message.role) if hasattr(choice.message, "role") else None,
                 ))],
                 usage_metadata = AiSuiteLLMClient.make_usage_metadata(response.usage) if hasattr(response, "usage") and response.usage is not None else None,
-            )
-        elif result_type == "json":
-            response = self.client.chat.completions.create(**aisuite_kwargs)
-            
-            parts: list[Part] = []
-            text = ""
-            for choice in response.choices:
-                tool_calls = getattr(choice.message, "tool_calls", None)
-                if tool_calls is not None:
-                    if not isinstance(tool_calls, list):
-                        tool_calls = [tool_calls]
-                    for tool_call in tool_calls:
-                        parts.append(Part(function_call=self.make_function_call(tool_call)))
-                if choice.message.content is not None:
-                    text += choice.message.content + "\n"
-                    parts.append(Part(text=choice.message.content))
-            parsed = BaseLLMClient.as_json(text)
-            
-            return Response(
-                candidates=[Candidate(content=Content(
-                    parts=parts,
-                    role=self._external_role(choice.message.role) if hasattr(choice.message, "role") else None,
-                ))],
-                usage_metadata = AiSuiteLLMClient.make_usage_metadata(response.usage) if hasattr(response, "usage") and response.usage is not None else None,
-                parsed=parsed,
             )
         elif isinstance(result_type, type(BaseModel)):
             message_with_structure = PromptBuilder().set_structured_output(result_type).build().render()
@@ -297,7 +272,7 @@ class AiSuiteLLMClientAsync(BaseLLMClientAsync):
                         })
             aisuite_kwargs["tools"] = aisuite_tools
         
-        if result_type is None:
+        if result_type is None or result_type == "text":
             response = await self.client.chat.completions.create(**aisuite_kwargs)
             
             parts: list[Part] = []
@@ -317,31 +292,6 @@ class AiSuiteLLMClientAsync(BaseLLMClientAsync):
                     role=self._external_role(choice.message.role) if hasattr(choice.message, "role") else None,
                 ))],
                 usage_metadata = AiSuiteLLMClient.make_usage_metadata(response.usage) if hasattr(response, "usage") and response.usage is not None else None,
-            )
-        elif result_type == "json":
-            response = await self.client.chat.completions.create(**aisuite_kwargs)
-            
-            parts: list[Part] = []
-            text = ""
-            for choice in response.choices:
-                tool_calls = getattr(choice.message, "tool_calls", None)
-                if tool_calls is not None:
-                    if not isinstance(tool_calls, list):
-                        tool_calls = [tool_calls]
-                    for tool_call in tool_calls:
-                        parts.append(Part(function_call=self.make_function_call(tool_call)))
-                if choice.message.content is not None:
-                    text += choice.message.content + "\n"
-                    parts.append(Part(text=choice.message.content))
-            parsed = BaseLLMClient.as_json(text)
-            
-            return Response(
-                candidates=[Candidate(content=Content(
-                    parts=parts,
-                    role=self._external_role(choice.message.role) if hasattr(choice.message, "role") else None,
-                ))],
-                usage_metadata = AiSuiteLLMClient.make_usage_metadata(response.usage) if hasattr(response, "usage") and response.usage is not None else None,
-                parsed=parsed,
             )
         elif isinstance(result_type, type(BaseModel)):
             message_with_structure = PromptBuilder().set_structured_output(result_type).build().render()
