@@ -5,7 +5,7 @@ from pydantic import BaseModel
 from google.genai import Client, types
 
 from promptbuilder.llm_client.base_client import BaseLLMClient, BaseLLMClientAsync, ResultType
-from promptbuilder.llm_client.types import Response, Content, ThinkingConfig, Tool, ToolConfig, Model
+from promptbuilder.llm_client.types import Response, Content, Part, ThinkingConfig, Tool, ToolConfig, Model
 from promptbuilder.llm_client.config import DecoratorConfigs
 
 
@@ -30,6 +30,29 @@ class GoogleLLMClient(BaseLLMClient):
     def api_key(self) -> str:
         return self._api_key
     
+    @staticmethod
+    def _preprocess_messages(messages: list[Content]) -> list[Content]:
+        new_messages = []
+        for message in messages:
+            # TODO:
+            # copy parts from message to new_message
+            # if part has inline_data, set display_name to None in new_message
+            new_parts = []
+            if message.parts:
+                for part in message.parts:
+                    if part.inline_data is not None:
+                        new_part = Part.model_copy(part, deep=True)
+                        new_part.inline_data.display_name = None
+                    else:
+                        new_part = part
+                    new_parts.append(new_part)
+            new_message = Content(
+                role=message.role,
+                parts=new_parts
+            )
+            new_messages.append(new_message)
+        return new_messages
+        
     def create(
         self,
         messages: list[Content],
@@ -41,6 +64,7 @@ class GoogleLLMClient(BaseLLMClient):
         tools: list[Tool] | None = None,
         tool_config: ToolConfig = ToolConfig(),
     ) -> Response:
+        messages = self._preprocess_messages(messages)
         if max_tokens is None:
             max_tokens = self.default_max_tokens
         config = types.GenerateContentConfig(
@@ -150,7 +174,7 @@ class GoogleLLMClientAsync(BaseLLMClientAsync):
     @property
     def api_key(self) -> str:
         return self._api_key
-    
+
     async def create(
         self,
         messages: list[Content],
@@ -162,6 +186,7 @@ class GoogleLLMClientAsync(BaseLLMClientAsync):
         tools: list[Tool] | None = None,
         tool_config: ToolConfig = ToolConfig(),
     ) -> Response:
+        messages = GoogleLLMClient._preprocess_messages(messages)
         if max_tokens is None:
             max_tokens = self.default_max_tokens
         config = types.GenerateContentConfig(
@@ -176,20 +201,12 @@ class GoogleLLMClientAsync(BaseLLMClientAsync):
         if thinking_config.include_thoughts or "gemini-2.5" in self.model:
             config.thinking_config = thinking_config
         
-        if result_type is None:
+        if result_type is None or result_type == "json":
             return await self.client.aio.models.generate_content(
                 model=self.model,
                 contents=messages,
                 config=config,
             )
-        elif result_type == "json":
-            response = await self.client.aio.models.generate_content(
-                model=self.model,
-                contents=messages,
-                config=config,
-            )
-            response.parsed = BaseLLMClient.as_json(response.text)
-            return response
         elif isinstance(result_type, type(BaseModel)):
             config.response_mime_type = "application/json"
             config.response_schema = result_type

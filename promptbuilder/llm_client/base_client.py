@@ -168,7 +168,7 @@ class BaseLLMClient(ABC, utils.InheritDecoratorsMixin):
             tool_config=ToolConfig(function_calling_config=FunctionCallingConfig(mode=tool_choice_mode)),
         )
 
-        while autocomplete and response.candidates and response.candidates[0].finish_reason in [FinishReason.STOP, FinishReason.MAX_TOKENS]:
+        while autocomplete and response.candidates and response.candidates[0].finish_reason not in [FinishReason.STOP, FinishReason.MAX_TOKENS]:
             BaseLLMClient._append_generated_part(messages, response)
 
             response = self.create(
@@ -184,6 +184,8 @@ class BaseLLMClient(ABC, utils.InheritDecoratorsMixin):
         if result_type is None:
             return response.text
         else:
+            if result_type == "json":
+                response.parsed = BaseLLMClient.as_json(response.text)
             return response.parsed
     
 
@@ -432,7 +434,7 @@ class BaseLLMClientAsync(ABC, utils.InheritDecoratorsMixin):
         if max_tokens is None:
             max_tokens = self.default_max_tokens
 
-        while autocomplete and response.candidates and response.candidates[0].finish_reason in [FinishReason.STOP, FinishReason.MAX_TOKENS]:
+        while autocomplete and response.candidates and response.candidates[0].finish_reason not in [FinishReason.STOP, FinishReason.MAX_TOKENS]:
             BaseLLMClient._append_generated_part(messages, response)
 
             response = await self.create(
@@ -448,6 +450,8 @@ class BaseLLMClientAsync(ABC, utils.InheritDecoratorsMixin):
         if result_type is None:
             return response.text
         else:
+            if result_type == "json":
+                response.parsed = BaseLLMClient.as_json(response.text)
             return response.parsed
     
     @logfire_decorators.create_stream_async

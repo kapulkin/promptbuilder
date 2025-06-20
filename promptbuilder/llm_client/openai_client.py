@@ -169,7 +169,7 @@ class OpenaiLLMClient(BaseLLMClient):
             elif tool_choice_mode == "ANY":
                 openai_kwargs["tool_choice"] = "required"
         
-        if result_type is None:
+        if result_type is None or result_type == "json":
             response = self.client.responses.create(**openai_kwargs)
             
             parts: list[Part] = []
@@ -190,32 +190,6 @@ class OpenaiLLMClient(BaseLLMClient):
                     prompt_token_count=response.usage.input_tokens,
                     total_token_count=response.usage.total_tokens,
                 ),
-            )
-        elif result_type == "json":
-            response = self.client.responses.create(**openai_kwargs)
-            
-            parts: list[Part] = []
-            text = ""
-            for output_item in response.output:
-                if output_item.type == "message":
-                    for content in output_item.content:
-                        parts.append(Part(text=content.text))
-                        text += content.text + "\n"
-                elif output_item.type == "reasoning":
-                    for summary in output_item.summary:
-                        parts.append(Part(text=summary.text, thought=True))
-                elif output_item.type == "function_call":
-                    parts.append(Part(function_call=FunctionCall(args=json.loads(output_item.arguments), name=output_item.name)))
-            parsed = BaseLLMClient.as_json(text)
-            
-            return Response(
-                candidates=[Candidate(content=Content(parts=parts, role="model"))],
-                usage_metadata=UsageMetadata(
-                    candidates_token_count=response.usage.output_tokens,
-                    prompt_token_count=response.usage.input_tokens,
-                    total_token_count=response.usage.total_tokens,
-                ),
-                parsed=parsed,
             )
         elif isinstance(result_type, type(BaseModel)):
             response = self.client.responses.parse(**openai_kwargs, text_format=result_type)
@@ -403,7 +377,7 @@ class OpenaiLLMClientAsync(BaseLLMClientAsync):
             elif tool_choice_mode == "ANY":
                 openai_kwargs["tool_choice"] = "required"
         
-        if result_type is None:
+        if result_type is None or result_type == "text":
             response = await self.client.responses.create(**openai_kwargs)
             
             parts: list[Part] = []
@@ -424,32 +398,6 @@ class OpenaiLLMClientAsync(BaseLLMClientAsync):
                     prompt_token_count=response.usage.input_tokens,
                     total_token_count=response.usage.total_tokens,
                 ),
-            )
-        elif result_type == "json":
-            response = await self.client.responses.create(**openai_kwargs)
-            
-            parts: list[Part] = []
-            text = ""
-            for output_item in response.output:
-                if output_item.type == "message":
-                    for content in output_item.content:
-                        parts.append(Part(text=content.text))
-                        text += content.text + "\n"
-                elif output_item.type == "reasoning":
-                    for summary in output_item.summary:
-                        parts.append(Part(text=summary.text, thought=True))
-                elif output_item.type == "function_call":
-                    parts.append(Part(function_call=FunctionCall(args=json.loads(output_item.arguments), name=output_item.name)))
-            parsed = BaseLLMClient.as_json(text)
-            
-            return Response(
-                candidates=[Candidate(content=Content(parts=parts, role="model"))],
-                usage_metadata=UsageMetadata(
-                    candidates_token_count=response.usage.output_tokens,
-                    prompt_token_count=response.usage.input_tokens,
-                    total_token_count=response.usage.total_tokens,
-                ),
-                parsed=parsed,
             )
         elif isinstance(result_type, type(BaseModel)):
             response = await self.client.responses.parse(**openai_kwargs, text_format=result_type)

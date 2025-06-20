@@ -134,12 +134,6 @@ class UsageMetadata(BaseModel):
 class ThinkingConfig(BaseModel):
     include_thoughts: Optional[bool] = None
     thinking_budget: Optional[int] = None
-    
-    @model_validator(mode="after")
-    def validate_all_fields_at_the_same_time(self) -> Self:
-        if self.include_thoughts and self.thinking_budget is None:
-            raise ValueError("To use thinking you must specify a thinking_budget")
-        return self
 
 class Response(BaseModel):
     candidates: Optional[list[Candidate]] = None

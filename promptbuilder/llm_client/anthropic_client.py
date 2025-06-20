@@ -224,7 +224,7 @@ class AnthropicLLMClient(BaseLLMClient):
                     tool_choice_mode = tool_config.function_calling_config.mode
             anthropic_kwargs["tool_choice"] = {"type": tool_choice_mode.lower()}
         
-        if result_type is None:
+        if result_type is None or result_type == "text":
             response = self.client.messages.create(**anthropic_kwargs)
             
             parts: list[Part] = []
@@ -243,29 +243,6 @@ class AnthropicLLMClient(BaseLLMClient):
                     prompt_token_count=response.usage.input_tokens,
                     total_token_count=response.usage.output_tokens + response.usage.input_tokens,
                 ),
-            )
-        elif result_type == "json":
-            response = self.client.messages.create(**anthropic_kwargs)
-            parts: list[Part] = []
-            text = ""
-            for content in response.content:
-                if content.type == "thinking":
-                    parts.append(Part(text=content.thinking, thought=True))
-                elif content.type == "text":
-                    text += content.text + "\n"
-                    parts.append(Part(text=content.text))
-                elif content.type == "tool_use":
-                    parts.append(Part(function_call=FunctionCall(args=content.input, name=content.name)))
-            parsed = BaseLLMClient.as_json(text)
-            
-            return Response(
-                candidates=[Candidate(content=Content(parts=parts, role="model"))],
-                usage_metadata=UsageMetadata(
-                    candidates_token_count=response.usage.output_tokens,
-                    prompt_token_count=response.usage.input_tokens,
-                    total_token_count=response.usage.output_tokens + response.usage.input_tokens,
-                ),
-                parsed=parsed,
             )
         elif isinstance(result_type, type(BaseModel)):
             message_with_structure = PromptBuilder().set_structured_output(result_type).build().render()
@@ -463,7 +440,7 @@ class AnthropicLLMClientAsync(BaseLLMClientAsync):
                     tool_choice_mode = tool_config.function_calling_config.mode
             anthropic_kwargs["tool_choice"] = {"type": tool_choice_mode.lower()}
         
-        if result_type is None:
+        if result_type is None or result_type == "text":
             response = await self.client.messages.create(**anthropic_kwargs)
             
             parts: list[Part] = []
@@ -482,29 +459,6 @@ class AnthropicLLMClientAsync(BaseLLMClientAsync):
                     prompt_token_count=response.usage.input_tokens,
                     total_token_count=response.usage.output_tokens + response.usage.input_tokens,
                 ),
-            )
-        elif result_type == "json":
-            response = await self.client.messages.create(**anthropic_kwargs)
-            parts: list[Part] = []
-            text = ""
-            for content in response.content:
-                if content.type == "thinking":
-                    parts.append(Part(text=content.thinking, thought=True))
-                elif content.type == "text":
-                    text += content.text + "\n"
-                    parts.append(Part(text=content.text))
-                elif content.type == "tool_use":
-                    parts.append(Part(function_call=FunctionCall(args=content.input, name=content.name)))
-            parsed = BaseLLMClient.as_json(text)
-            
-            return Response(
-                candidates=[Candidate(content=Content(parts=parts, role="model"))],
-                usage_metadata=UsageMetadata(
-                    candidates_token_count=response.usage.output_tokens,
-                    prompt_token_count=response.usage.input_tokens,
-                    total_token_count=response.usage.output_tokens + response.usage.input_tokens,
-                ),
-                parsed=parsed,
             )
         elif isinstance(result_type, type(BaseModel)):
             message_with_structure = PromptBuilder().set_structured_output(result_type).build().render()
