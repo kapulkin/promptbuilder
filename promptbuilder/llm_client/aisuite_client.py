@@ -115,7 +115,7 @@ class AiSuiteLLMClient(BaseLLMClient):
                         })
             aisuite_kwargs["tools"] = aisuite_tools
         
-        if result_type is None or result_type == "text":
+        if result_type is None or result_type == "json":
             response = self.client.chat.completions.create(**aisuite_kwargs)
             
             parts: list[Part] = []
@@ -164,6 +164,8 @@ class AiSuiteLLMClient(BaseLLMClient):
                 usage_metadata = AiSuiteLLMClient.make_usage_metadata(response.usage) if hasattr(response, "usage") and response.usage is not None else None,
                 parsed=parsed_pydantic,
             )
+        else:
+            raise ValueError(f"Unsupported result_type: {result_type}. Supported types are: None, 'json', or a Pydantic model.")
 
 
 class AiSuiteLLMClientAsync(BaseLLMClientAsync):
@@ -272,7 +274,7 @@ class AiSuiteLLMClientAsync(BaseLLMClientAsync):
                         })
             aisuite_kwargs["tools"] = aisuite_tools
         
-        if result_type is None or result_type == "text":
+        if result_type is None or result_type == "json":
             response = await self.client.chat.completions.create(**aisuite_kwargs)
             
             parts: list[Part] = []
@@ -321,3 +323,5 @@ class AiSuiteLLMClientAsync(BaseLLMClientAsync):
                 usage_metadata = AiSuiteLLMClient.make_usage_metadata(response.usage) if hasattr(response, "usage") and response.usage is not None else None,
                 parsed=parsed_pydantic,
             )
+        else:
+            raise ValueError(f"Unsupported result_type: {result_type}. Supported types are: None, 'json', or a Pydantic model.")

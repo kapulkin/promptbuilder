@@ -6,16 +6,13 @@ import logging
 from abc import ABC, abstractmethod
 from typing import Iterator, AsyncIterator, Literal, overload
 
-from promptbuilder.llm_client.types import Response, Content, Part, Tool, ToolConfig, FunctionCall, FunctionCallingConfig, Json, ThinkingConfig, ApiKey, PydanticStructure, FinishReason
+from promptbuilder.llm_client.types import Response, Content, Part, Tool, ToolConfig, FunctionCall, FunctionCallingConfig, Json, ThinkingConfig, ApiKey, PydanticStructure, ResultType, FinishReason
 import promptbuilder.llm_client.utils as utils
 import promptbuilder.llm_client.logfire_decorators as logfire_decorators
 from promptbuilder.llm_client.config import GLOBAL_CONFIG
 
 
 logger = logging.getLogger(__name__)
-
-type ResultType = Literal["json"] | type[PydanticStructure] | None
-
 
 class BaseLLMClient(ABC, utils.InheritDecoratorsMixin):
     provider: str

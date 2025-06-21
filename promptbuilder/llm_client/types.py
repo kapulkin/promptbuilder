@@ -14,6 +14,8 @@ type Json = list | dict
 type JsonType = Literal["string", "number", "integer", "boolean", "array", "object"]
 PydanticStructure = TypeVar("PydanticStructure", bound=BaseModel)
 
+type ResultType = Literal["json"] | type[PydanticStructure] | None
+
 
 class CustomApiKey(ABC):
     @abstractmethod

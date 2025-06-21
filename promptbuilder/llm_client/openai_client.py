@@ -377,7 +377,7 @@ class OpenaiLLMClientAsync(BaseLLMClientAsync):
             elif tool_choice_mode == "ANY":
                 openai_kwargs["tool_choice"] = "required"
         
-        if result_type is None or result_type == "text":
+        if result_type is None or result_type == "json":
             response = await self.client.responses.create(**openai_kwargs)
             
             parts: list[Part] = []
@@ -423,6 +423,8 @@ class OpenaiLLMClientAsync(BaseLLMClientAsync):
                 ),
                 parsed=parsed,
             )
+        else:
+            raise ValueError(f"Unsupported result_type: {result_type}. Supported types are: None, 'json', or a Pydantic model.")
         
     async def create_stream(
         self,

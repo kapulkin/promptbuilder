@@ -224,7 +224,7 @@ class AnthropicLLMClient(BaseLLMClient):
                     tool_choice_mode = tool_config.function_calling_config.mode
             anthropic_kwargs["tool_choice"] = {"type": tool_choice_mode.lower()}
         
-        if result_type is None or result_type == "text":
+        if result_type is None or result_type == "json":
             response = self.client.messages.create(**anthropic_kwargs)
             
             parts: list[Part] = []
@@ -440,7 +440,7 @@ class AnthropicLLMClientAsync(BaseLLMClientAsync):
                     tool_choice_mode = tool_config.function_calling_config.mode
             anthropic_kwargs["tool_choice"] = {"type": tool_choice_mode.lower()}
         
-        if result_type is None or result_type == "text":
+        if result_type is None or result_type == "json":
             response = await self.client.messages.create(**anthropic_kwargs)
             
             parts: list[Part] = []
@@ -487,6 +487,8 @@ class AnthropicLLMClientAsync(BaseLLMClientAsync):
                 ),
                 parsed=parsed_pydantic,
             )
+        else:
+            raise ValueError(f"Unsupported result_type: {result_type}. Supported types are: None, 'json', or a Pydantic model.")
     
     async def create_stream(
         self,
