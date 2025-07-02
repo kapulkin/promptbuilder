@@ -45,12 +45,13 @@ class OpenaiLLMClient(BaseLLMClient):
         model: str,
         api_key: str = os.getenv("OPENAI_API_KEY"),
         decorator_configs: DecoratorConfigs | None = None,
+        default_thinking_config: ThinkingConfig | None = None,
         default_max_tokens: int | None = None,
         **kwargs,
     ):
         if api_key is None or not isinstance(api_key, str):
             raise ValueError("To create an openai llm client you need to either set the environment variable OPENAI_API_KEY or pass the api_key in string format")
-        super().__init__(OpenaiLLMClient.PROVIDER, model, decorator_configs=decorator_configs, default_max_tokens=default_max_tokens)
+        super().__init__(OpenaiLLMClient.PROVIDER, model, decorator_configs=decorator_configs, default_thinking_config=default_thinking_config, default_max_tokens=default_max_tokens)
         self._api_key = api_key
         self.client = OpenAI(api_key=api_key)
     
@@ -92,7 +93,10 @@ class OpenaiLLMClient(BaseLLMClient):
         return openai_messages
 
     @staticmethod
-    def _process_thinking_config(thinking_config: ThinkingConfig) -> dict[str, str]:
+    def _process_thinking_config(thinking_config: ThinkingConfig | None) -> dict[str, str]:
+        if thinking_config is None:
+            return {}
+        
         openai_thinking_config = {}
         if thinking_config.include_thoughts:
             # openai_thinking_config["summary"] = "auto"
@@ -114,7 +118,7 @@ class OpenaiLLMClient(BaseLLMClient):
         messages: list[Content],
         result_type: ResultType = None,
         *,
-        thinking_config: ThinkingConfig = ThinkingConfig(),
+        thinking_config: ThinkingConfig | None = None,
         system_message: str | None = None,
         max_tokens: int | None = None,
         tools: list[Tool] | None = None,
@@ -131,6 +135,8 @@ class OpenaiLLMClient(BaseLLMClient):
             "input": openai_messages,
         }
         
+        if thinking_config is None:
+            thinking_config = self.default_thinking_config
         openai_kwargs.update(OpenaiLLMClient._process_thinking_config(thinking_config))
 
         if tools is not None:
@@ -222,6 +228,7 @@ class OpenaiLLMClient(BaseLLMClient):
         self,
         messages: list[Content],
         *,
+        thinking_config: ThinkingConfig | None = None,
         system_message: str | None = None,
         max_tokens: int | None = None,
     ) -> Iterator[Response]:
@@ -235,6 +242,11 @@ class OpenaiLLMClient(BaseLLMClient):
             "max_output_tokens": max_tokens,
             "input": openai_messages,
         }
+        
+        if thinking_config is None:
+            thinking_config = self.default_thinking_config
+        openai_kwargs.update(OpenaiLLMClient._process_thinking_config(thinking_config))
+        
         response = self.client.responses.create(**openai_kwargs, stream=True)
         return OpenaiStreamIterator(response)
 
@@ -298,12 +310,13 @@ class OpenaiLLMClientAsync(BaseLLMClientAsync):
         model: str,
         api_key: str = os.getenv("OPENAI_API_KEY"),
         decorator_configs: DecoratorConfigs | None = None,
+        default_thinking_config: ThinkingConfig | None = None,
         default_max_tokens: int | None = None,
         **kwargs,
     ):
         if api_key is None or not isinstance(api_key, str):
             raise ValueError("To create an openai llm client you need to either set the environment variable OPENAI_API_KEY or pass the api_key in string format")
-        super().__init__(OpenaiLLMClientAsync.PROVIDER, model, decorator_configs=decorator_configs, default_max_tokens=default_max_tokens)
+        super().__init__(OpenaiLLMClientAsync.PROVIDER, model, decorator_configs=decorator_configs, default_thinking_config=default_thinking_config, default_max_tokens=default_max_tokens)
         self._api_key = api_key
         self.client = AsyncOpenAI(api_key=api_key)
     
@@ -315,7 +328,8 @@ class OpenaiLLMClientAsync(BaseLLMClientAsync):
         self,
         messages: list[Content],
         result_type: ResultType = None,
-        thinking_config: ThinkingConfig = ThinkingConfig(),
+        *,
+        thinking_config: ThinkingConfig | None = None,
         system_message: str | None = None,
         max_tokens: int | None = None,
         tools: list[Tool] | None = None,
@@ -339,6 +353,8 @@ class OpenaiLLMClientAsync(BaseLLMClientAsync):
             "input": openai_messages,
         }
         
+        if thinking_config is None:
+            thinking_config = self.default_thinking_config
         openai_kwargs.update(OpenaiLLMClient._process_thinking_config(thinking_config))
         
         if tools is not None:
@@ -430,6 +446,7 @@ class OpenaiLLMClientAsync(BaseLLMClientAsync):
         self,
         messages: list[Content],
         *,
+        thinking_config: ThinkingConfig | None = None,
         system_message: str | None = None,
         max_tokens: int | None = None,
     ) -> AsyncIterator[Response]:
@@ -450,6 +467,11 @@ class OpenaiLLMClientAsync(BaseLLMClientAsync):
             "max_output_tokens": max_tokens,
             "input": openai_messages,
         }
+        
+        if thinking_config is None:
+            thinking_config = self.default_thinking_config
+        openai_kwargs.update(OpenaiLLMClient._process_thinking_config(thinking_config))
+        
         response = await self.client.responses.create(**openai_kwargs, stream=True)
         return OpenaiStreamIteratorAsync(response)
 

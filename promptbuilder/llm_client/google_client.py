@@ -17,12 +17,13 @@ class GoogleLLMClient(BaseLLMClient):
         model: str,
         api_key: str = os.getenv("GOOGLE_API_KEY"),
         decorator_configs: DecoratorConfigs | None = None,
+        default_thinking_config: ThinkingConfig | None = None,
         default_max_tokens: int | None = None,
         **kwargs,
     ):
         if api_key is None or not isinstance(api_key, str):
             raise ValueError("To create a google llm client you need to either set the environment variable GOOGLE_API_KEY or pass the api_key in string format")
-        super().__init__(GoogleLLMClient.PROVIDER, model, decorator_configs=decorator_configs, default_max_tokens=default_max_tokens)
+        super().__init__(GoogleLLMClient.PROVIDER, model, decorator_configs=decorator_configs, default_thinking_config=default_thinking_config, default_max_tokens=default_max_tokens)
         self._api_key = api_key
         self.client = Client(api_key=api_key)
     
@@ -58,7 +59,7 @@ class GoogleLLMClient(BaseLLMClient):
         messages: list[Content],
         result_type: ResultType = None,
         *,
-        thinking_config: ThinkingConfig = ThinkingConfig(),
+        thinking_config: ThinkingConfig | None = None,
         system_message: str | None = None,
         max_tokens: int | None = None,
         tools: list[Tool] | None = None,
@@ -74,10 +75,9 @@ class GoogleLLMClient(BaseLLMClient):
             tool_config=tool_config,
         )
         
-        if not thinking_config.include_thoughts:
-            thinking_config = ThinkingConfig(include_thoughts=False, thinking_budget=0)
-        if thinking_config.include_thoughts or "gemini-2.5-pro-preview-05-06" in self.model:
-            config.thinking_config = thinking_config
+        if thinking_config is None:
+            thinking_config = self.default_thinking_config
+        config.thinking_config = thinking_config
         
         if result_type is None:
             return self.client.models.generate_content(
@@ -108,6 +108,7 @@ class GoogleLLMClient(BaseLLMClient):
         self,
         messages: list[Content],
         *,
+        thinking_config: ThinkingConfig | None = None,
         system_message: str | None = None,
         max_tokens: int | None = None,
     ) -> Iterator[Response]:
@@ -116,8 +117,12 @@ class GoogleLLMClient(BaseLLMClient):
         config = types.GenerateContentConfig(
             system_instruction=system_message,
             max_output_tokens=max_tokens,
-            thinking_config=ThinkingConfig(include_thoughts=False, thinking_budget=0),
         )
+        
+        if thinking_config is None:
+            thinking_config = self.default_thinking_config
+        config.thinking_config = thinking_config
+        
         response = self.client.models.generate_content_stream(
             model=self.model,
             contents=messages,
@@ -162,12 +167,13 @@ class GoogleLLMClientAsync(BaseLLMClientAsync):
         model: str,
         api_key: str = os.getenv("GOOGLE_API_KEY"),
         decorator_configs: DecoratorConfigs | None = None,
+        default_thinking_config: ThinkingConfig | None = None,
         default_max_tokens: int | None = None,
         **kwargs,
     ):
         if api_key is None or not isinstance(api_key, str):
             raise ValueError("To create a google llm client you need to either set the environment variable GOOGLE_API_KEY or pass the api_key in string format")
-        super().__init__(GoogleLLMClientAsync.PROVIDER, model, decorator_configs=decorator_configs, default_max_tokens=default_max_tokens)
+        super().__init__(GoogleLLMClientAsync.PROVIDER, model, decorator_configs=decorator_configs, default_thinking_config=default_thinking_config, default_max_tokens=default_max_tokens)
         self._api_key = api_key
         self.client = Client(api_key=api_key)
     
@@ -180,7 +186,7 @@ class GoogleLLMClientAsync(BaseLLMClientAsync):
         messages: list[Content],
         result_type: ResultType = None,
         *,
-        thinking_config: ThinkingConfig = ThinkingConfig(),
+        thinking_config: ThinkingConfig | None = None,
         system_message: str | None = None,
         max_tokens: int | None = None,
         tools: list[Tool] | None = None,
@@ -196,10 +202,9 @@ class GoogleLLMClientAsync(BaseLLMClientAsync):
             tool_config=tool_config,
         )
         
-        if not thinking_config.include_thoughts:
-            thinking_config = ThinkingConfig(include_thoughts=False, thinking_budget=0)
-        if thinking_config.include_thoughts or "gemini-2.5" in self.model:
-            config.thinking_config = thinking_config
+        if thinking_config is None:
+            thinking_config = self.default_thinking_config
+        config.thinking_config = thinking_config
         
         if result_type is None or result_type == "json":
             return await self.client.aio.models.generate_content(
@@ -222,6 +227,7 @@ class GoogleLLMClientAsync(BaseLLMClientAsync):
         self,
         messages: list[Content],
         *,
+        thinking_config: ThinkingConfig | None = None,
         system_message: str | None = None,
         max_tokens: int | None = None,
     ) -> AsyncIterator[Response]:
@@ -230,8 +236,12 @@ class GoogleLLMClientAsync(BaseLLMClientAsync):
         config = types.GenerateContentConfig(
             system_instruction=system_message,
             max_output_tokens=max_tokens,
-            thinking_config=ThinkingConfig(include_thoughts=False, thinking_budget=0),
         )
+        
+        if thinking_config is None:
+            thinking_config = self.default_thinking_config
+        config.thinking_config = thinking_config
+        
         response = await self.client.aio.models.generate_content_stream(
             model=self.model,
             contents=messages,

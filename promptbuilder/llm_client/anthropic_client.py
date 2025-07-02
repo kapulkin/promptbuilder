@@ -111,13 +111,14 @@ class AnthropicLLMClient(BaseLLMClient):
         model: str,
         api_key: str = os.getenv("ANTHROPIC_API_KEY"),
         decorator_configs: DecoratorConfigs | None = None,
+        default_thinking_config: ThinkingConfig | None = None,
         default_max_tokens: int | None = None,
         default_max_tokens_strategy: DefaultMaxTokensStrategy = AnthropicDefaultMaxTokensStrategy(),
         **kwargs,
     ):
         if api_key is None or not isinstance(api_key, str):
             raise ValueError("To create an anthropic llm client you need to either set the environment variable ANTHROPIC_API_KEY or pass the api_key in string format")
-        super().__init__(AnthropicLLMClient.PROVIDER, model, decorator_configs=decorator_configs, default_max_tokens=default_max_tokens)
+        super().__init__(AnthropicLLMClient.PROVIDER, model, decorator_configs=decorator_configs, default_thinking_config=default_thinking_config, default_max_tokens=default_max_tokens)
         self._api_key = api_key
         self.client = Anthropic(api_key=api_key)
         self.default_max_tokens_strategy = default_max_tokens_strategy
@@ -166,7 +167,7 @@ class AnthropicLLMClient(BaseLLMClient):
         messages: list[Content],
         result_type: ResultType = None,
         *,
-        thinking_config: ThinkingConfig = ThinkingConfig(),
+        thinking_config: ThinkingConfig | None = None,
         system_message: str | None = None,
         max_tokens: int | None = None,
         tools: list[Tool] | None = None,
@@ -185,15 +186,18 @@ class AnthropicLLMClient(BaseLLMClient):
             "messages": anthropic_messages,
         }
         
-        if thinking_config.include_thoughts:
-            anthropic_kwargs["thinking"] = {
-                "budget_tokens": thinking_config.thinking_budget,
-                "type": "enabled",
-            }
-        else:
-            anthropic_kwargs["thinking"] = {
-                "type": "disabled",
-            }
+        if thinking_config is None:
+            thinking_config = self.default_thinking_config
+        if thinking_config is not None:
+            if thinking_config.include_thoughts:
+                anthropic_kwargs["thinking"] = {
+                    "budget_tokens": thinking_config.thinking_budget,
+                    "type": "enabled",
+                }
+            else:
+                anthropic_kwargs["thinking"] = {
+                    "type": "disabled",
+                }
         
         if system_message is not None:
             anthropic_kwargs["system"] = system_message
@@ -278,6 +282,7 @@ class AnthropicLLMClient(BaseLLMClient):
         self,
         messages: list[Content],
         *,
+        thinking_config: ThinkingConfig | None = None,
         system_message: str | None = None,
         max_tokens: int | None = None,
     ) -> Iterator[Response]:
@@ -295,6 +300,19 @@ class AnthropicLLMClient(BaseLLMClient):
             "messages": anthropic_messages,
             "stream": True,
         }
+        
+        if thinking_config is None:
+            thinking_config = self.default_thinking_config
+        if thinking_config is not None:
+            if thinking_config.include_thoughts:
+                anthropic_kwargs["thinking"] = {
+                    "budget_tokens": thinking_config.thinking_budget,
+                    "type": "enabled",
+                }
+            else:
+                anthropic_kwargs["thinking"] = {
+                    "type": "disabled",
+                }
         
         if system_message is not None:
             anthropic_kwargs["system"] = system_message
@@ -314,6 +332,7 @@ class AnthropicLLMClient(BaseLLMClient):
                 display_name=anthropic_model.display_name,
             ))
         return models
+
 
 class AnthropicStreamIteratorAsync:
     def __init__(self, anthropic_iterator: AsyncStream[RawMessageStreamEvent]):
@@ -356,13 +375,14 @@ class AnthropicLLMClientAsync(BaseLLMClientAsync):
         model: str,
         api_key: str = os.getenv("ANTHROPIC_API_KEY"),
         decorator_configs: DecoratorConfigs | None = None,
+        default_thinking_config: ThinkingConfig | None = None,
         default_max_tokens: int | None = None,
         default_max_tokens_strategy: DefaultMaxTokensStrategy = AnthropicDefaultMaxTokensStrategy(),
         **kwargs,
     ):
         if api_key is None or not isinstance(api_key, str):
             raise ValueError("To create an anthropic llm client you need to either set the environment variable ANTHROPIC_API_KEY or pass the api_key in string format")
-        super().__init__(AnthropicLLMClientAsync.PROVIDER, model, decorator_configs=decorator_configs, default_max_tokens=default_max_tokens)
+        super().__init__(AnthropicLLMClientAsync.PROVIDER, model, decorator_configs=decorator_configs, default_thinking_config=default_thinking_config, default_max_tokens=default_max_tokens)
         self._api_key = api_key
         self.client = AsyncAnthropic(api_key=api_key)
         self.default_max_tokens_strategy = default_max_tokens_strategy
@@ -376,7 +396,7 @@ class AnthropicLLMClientAsync(BaseLLMClientAsync):
         messages: list[Content],
         result_type: ResultType = None,
         *,
-        thinking_config: ThinkingConfig = ThinkingConfig(),
+        thinking_config: ThinkingConfig | None = None,
         system_message: str | None = None,
         max_tokens: int | None = None,
         tools: list[Tool] | None = None,
@@ -401,15 +421,18 @@ class AnthropicLLMClientAsync(BaseLLMClientAsync):
             "messages": anthropic_messages,
         }
         
-        if thinking_config.include_thoughts:
-            anthropic_kwargs["thinking"] = {
-                "budget_tokens": thinking_config.thinking_budget,
-                "type": "enabled",
-            }
-        else:
-            anthropic_kwargs["thinking"] = {
-                "type": "disabled",
-            }
+        if thinking_config is None:
+            thinking_config = self.default_thinking_config
+        if thinking_config is not None:
+            if thinking_config.include_thoughts:
+                anthropic_kwargs["thinking"] = {
+                    "budget_tokens": thinking_config.thinking_budget,
+                    "type": "enabled",
+                }
+            else:
+                anthropic_kwargs["thinking"] = {
+                    "type": "disabled",
+                }
         
         if system_message is not None:
             anthropic_kwargs["system"] = system_message
@@ -494,6 +517,7 @@ class AnthropicLLMClientAsync(BaseLLMClientAsync):
         self,
         messages: list[Content],
         *,
+        thinking_config: ThinkingConfig | None = None,
         system_message: str | None = None,
         max_tokens: int | None = None,
     ) -> AsyncIterator[Response]:
@@ -516,6 +540,19 @@ class AnthropicLLMClientAsync(BaseLLMClientAsync):
             "messages": anthropic_messages,
             "stream": True,
         }
+        
+        if thinking_config is None:
+            thinking_config = self.default_thinking_config
+        if thinking_config is not None:
+            if thinking_config.include_thoughts:
+                anthropic_kwargs["thinking"] = {
+                    "budget_tokens": thinking_config.thinking_budget,
+                    "type": "enabled",
+                }
+            else:
+                anthropic_kwargs["thinking"] = {
+                    "type": "disabled",
+                }
         
         if system_message is not None:
             anthropic_kwargs["system"] = system_message

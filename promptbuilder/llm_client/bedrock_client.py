@@ -53,6 +53,7 @@ class BedrockLLMClient(BaseLLMClient):
         model: str,
         api_key: BedrockApiKey = BedrockApiKey(),
         decorator_configs: DecoratorConfigs | None = None,
+        default_thinking_config: ThinkingConfig | None = None,
         default_max_tokens: int | None = None,
         **kwargs,
     ):
@@ -61,7 +62,7 @@ class BedrockLLMClient(BaseLLMClient):
                 "To create a bedrock llm client you need to either set the environment variables "
                 "AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, and optional AWS_DEFAULT_REGION or pass the api_key as BedrockApiKey instance"
             )
-        super().__init__(BedrockLLMClient.PROVIDER, model, decorator_configs=decorator_configs, default_max_tokens=default_max_tokens)
+        super().__init__(BedrockLLMClient.PROVIDER, model, decorator_configs=decorator_configs, default_thinking_config=default_thinking_config, default_max_tokens=default_max_tokens)
         self._api_key = api_key
     
     @property
@@ -73,7 +74,7 @@ class BedrockLLMClient(BaseLLMClient):
         messages: list[Content],
         result_type: ResultType = None,
         *,
-        thinking_config: ThinkingConfig = ThinkingConfig(),
+        thinking_config: ThinkingConfig | None = None,
         system_message: str | None = None,
         max_tokens: int | None = None,
         tools: list[Tool] | None = None,
@@ -230,6 +231,7 @@ class BedrockLLMClient(BaseLLMClient):
         self,
         messages: list[Content],
         *,
+        thinking_config: ThinkingConfig | None = None,
         system_message: str | None = None,
         max_tokens: int | None = None,
     ) -> Iterator[Response]:
@@ -313,6 +315,7 @@ class BedrockLLMClientAsync(BaseLLMClientAsync):
         model: str,
         api_key: BedrockApiKey = BedrockApiKey(),
         decorator_configs: DecoratorConfigs | None = None,
+        default_thinking_config: ThinkingConfig | None = None,
         default_max_tokens: int | None = None,
         **kwargs,
     ):
@@ -321,7 +324,7 @@ class BedrockLLMClientAsync(BaseLLMClientAsync):
                 "To create a bedrock llm client you need to either set the environment variables "
                 "AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, and optional AWS_DEFAULT_REGION or pass the api_key as BedrockApiKey instance"
             )
-        super().__init__(BedrockLLMClient.PROVIDER, model, decorator_configs=decorator_configs, default_max_tokens=default_max_tokens)
+        super().__init__(BedrockLLMClient.PROVIDER, model, decorator_configs=decorator_configs, default_thinking_config=default_thinking_config, default_max_tokens=default_max_tokens)
         self._api_key = api_key
         self._aioboto_session = aioboto3.Session(
             aws_access_key_id=api_key.aws_access_key_id,
@@ -338,7 +341,7 @@ class BedrockLLMClientAsync(BaseLLMClientAsync):
         messages: list[Content],
         result_type: ResultType = None,
         *,
-        thinking_config: ThinkingConfig = ThinkingConfig(),
+        thinking_config: ThinkingConfig | None = None,
         system_message: str | None = None,
         max_tokens: int | None = None,
         tools: list[Tool] | None = None,
@@ -489,6 +492,7 @@ class BedrockLLMClientAsync(BaseLLMClientAsync):
         self,
         messages: list[Content],
         *,
+        thinking_config: ThinkingConfig | None = None,
         system_message: str | None = None,
         max_tokens: int | None = None,
     ) -> AsyncIterator[Response]:

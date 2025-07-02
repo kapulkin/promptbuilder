@@ -8,7 +8,7 @@ setup(
         "pydantic",
         "pytest",
         "aisuite-async",
-        "google-genai",
+        "google-genai>=1.4.0,<=1.21.0",
         "anthropic",
         "openai",
         "aioboto3"

@@ -17,7 +17,15 @@ logger = logging.getLogger(__name__)
 class BaseLLMClient(ABC, utils.InheritDecoratorsMixin):
     provider: str
     
-    def __init__(self, provider: str, model: str, decorator_configs: utils.DecoratorConfigs | None = None, default_max_tokens: int | None = None, **kwargs):
+    def __init__(
+        self,
+        provider: str,
+        model: str,
+        decorator_configs: utils.DecoratorConfigs | None = None,
+        default_thinking_config: ThinkingConfig | None = None,
+        default_max_tokens: int | None = None,
+        **kwargs,
+    ):
         self.provider = provider
         self.model = model
         
@@ -27,6 +35,11 @@ class BaseLLMClient(ABC, utils.InheritDecoratorsMixin):
             else:
                 decorator_configs = utils.DecoratorConfigs()
         self._decorator_configs = decorator_configs
+        
+        if default_thinking_config is None:
+            if self.full_model_name in GLOBAL_CONFIG.default_thinking_configs:
+                default_thinking_config = GLOBAL_CONFIG.default_thinking_configs[self.full_model_name]
+        self.default_thinking_config = default_thinking_config
         
         if default_max_tokens is None:
             if self.full_model_name in GLOBAL_CONFIG.default_max_tokens:
@@ -69,7 +82,7 @@ class BaseLLMClient(ABC, utils.InheritDecoratorsMixin):
         messages: list[Content],
         result_type: ResultType = None,
         *,
-        thinking_config: ThinkingConfig = ThinkingConfig(),
+        thinking_config: ThinkingConfig | None = None,
         system_message: str | None = None,
         max_tokens: int | None = None,
         tools: list[Tool] | None = None,
@@ -83,7 +96,7 @@ class BaseLLMClient(ABC, utils.InheritDecoratorsMixin):
         messages: list[Content],
         result_type: None = None,
         *,
-        thinking_config: ThinkingConfig = ThinkingConfig(),
+        thinking_config: ThinkingConfig | None = None,
         system_message: str | None = None,
         max_tokens: int | None = None,
         tools: None = None,
@@ -95,7 +108,7 @@ class BaseLLMClient(ABC, utils.InheritDecoratorsMixin):
         messages: list[Content],
         result_type: Literal["json"],
         *,
-        thinking_config: ThinkingConfig = ThinkingConfig(),
+        thinking_config: ThinkingConfig | None = None,
         system_message: str | None = None,
         max_tokens: int | None = None,
         tools: None = None,
@@ -107,7 +120,7 @@ class BaseLLMClient(ABC, utils.InheritDecoratorsMixin):
         messages: list[Content],
         result_type: type[PydanticStructure],
         *,
-        thinking_config: ThinkingConfig = ThinkingConfig(),
+        thinking_config: ThinkingConfig | None = None,
         system_message: str | None = None,
         max_tokens: int | None = None,
         tools: None = None,
@@ -119,7 +132,7 @@ class BaseLLMClient(ABC, utils.InheritDecoratorsMixin):
         messages: list[Content],
         result_type: Literal["tools"],
         *,
-        thinking_config: ThinkingConfig = ThinkingConfig(),
+        thinking_config: ThinkingConfig | None = None,
         system_message: str | None = None,
         max_tokens: int | None = None,
         tools: list[Tool],
@@ -131,12 +144,12 @@ class BaseLLMClient(ABC, utils.InheritDecoratorsMixin):
         messages: list[Content],
         result_type: ResultType | Literal["tools"] = None,
         *,
-        thinking_config: ThinkingConfig = ThinkingConfig(),
+        thinking_config: ThinkingConfig | None = None,
         system_message: str | None = None,
         max_tokens: int | None = None,
         tools: list[Tool] | None = None,
         tool_choice_mode: Literal["ANY", "NONE"] = "NONE",
-        autocomplete: bool = False
+        autocomplete: bool = False,
     ):
         if result_type == "tools":
             response = self.create(
@@ -220,7 +233,14 @@ class BaseLLMClient(ABC, utils.InheritDecoratorsMixin):
     @logfire_decorators.create_stream
     @utils.retry_cls
     @utils.rpm_limit_cls
-    def create_stream(self, messages: list[Content], *, system_message: str | None = None, max_tokens: int | None = None) -> Iterator[Response]:
+    def create_stream(
+        self,
+        messages: list[Content],
+        *,
+        thinking_config: ThinkingConfig | None = None,
+        system_message: str | None = None,
+        max_tokens: int | None = None,
+    ) -> Iterator[Response]:
         raise NotImplementedError
     
     @overload
@@ -229,7 +249,7 @@ class BaseLLMClient(ABC, utils.InheritDecoratorsMixin):
         prompt: str,
         result_type: None = None,
         *,
-        thinking_config: ThinkingConfig = ThinkingConfig(),
+        thinking_config: ThinkingConfig | None = None,
         system_message: str | None = None,
         max_tokens: int | None = None,
         tools: None = None,
@@ -241,7 +261,7 @@ class BaseLLMClient(ABC, utils.InheritDecoratorsMixin):
         prompt: str,
         result_type: Literal["json"],
         *,
-        thinking_config: ThinkingConfig = ThinkingConfig(),
+        thinking_config: ThinkingConfig | None = None,
         system_message: str | None = None,
         max_tokens: int | None = None,
         tools: None = None,
@@ -253,7 +273,7 @@ class BaseLLMClient(ABC, utils.InheritDecoratorsMixin):
         prompt: str,
         result_type: type[PydanticStructure],
         *,
-        thinking_config: ThinkingConfig = ThinkingConfig(),
+        thinking_config: ThinkingConfig | None = None,
         system_message: str | None = None,
         max_tokens: int | None = None,
         tools: None = None,
@@ -265,7 +285,7 @@ class BaseLLMClient(ABC, utils.InheritDecoratorsMixin):
         prompt: str,
         result_type: Literal["tools"],
         *,
-        thinking_config: ThinkingConfig = ThinkingConfig(),
+        thinking_config: ThinkingConfig | None = None,
         system_message: str | None = None,
         max_tokens: int | None = None,
         tools: list[Tool],
@@ -277,7 +297,7 @@ class BaseLLMClient(ABC, utils.InheritDecoratorsMixin):
         prompt: str,
         result_type: ResultType | Literal["tools"] = None,
         *,
-        thinking_config: ThinkingConfig = ThinkingConfig(),
+        thinking_config: ThinkingConfig | None = None,
         system_message: str | None = None,
         max_tokens: int | None = None,
         tools: list[Tool] | None = None,
@@ -297,7 +317,15 @@ class BaseLLMClient(ABC, utils.InheritDecoratorsMixin):
 class BaseLLMClientAsync(ABC, utils.InheritDecoratorsMixin):
     provider: str
     
-    def __init__(self, provider: str, model: str, decorator_configs: utils.DecoratorConfigs | None = None, default_max_tokens: int | None = None, **kwargs):
+    def __init__(
+        self,
+        provider: str,
+        model: str,
+        decorator_configs: utils.DecoratorConfigs | None = None,
+        default_thinking_config: ThinkingConfig | None = None,
+        default_max_tokens: int | None = None,
+        **kwargs,
+    ):
         self.provider = provider
         self.model = model
         
@@ -307,6 +335,11 @@ class BaseLLMClientAsync(ABC, utils.InheritDecoratorsMixin):
             else:
                 decorator_configs = utils.DecoratorConfigs()
         self._decorator_configs = decorator_configs
+        
+        if default_thinking_config is None:
+            if self.full_model_name in GLOBAL_CONFIG.default_thinking_configs:
+                default_thinking_config = GLOBAL_CONFIG.default_thinking_configs[self.full_model_name]
+        self.default_thinking_config = default_thinking_config
         
         if default_max_tokens is None:
             if self.full_model_name in GLOBAL_CONFIG.default_max_tokens:
@@ -332,7 +365,7 @@ class BaseLLMClientAsync(ABC, utils.InheritDecoratorsMixin):
         messages: list[Content],
         result_type: ResultType = None,
         *,
-        thinking_config: ThinkingConfig = ThinkingConfig(),
+        thinking_config: ThinkingConfig | None = None,
         system_message: str | None = None,
         max_tokens: int | None = None,
         tools: list[Tool] | None = None,
@@ -346,7 +379,7 @@ class BaseLLMClientAsync(ABC, utils.InheritDecoratorsMixin):
         messages: list[Content],
         result_type: None = None,
         *,
-        thinking_config: ThinkingConfig = ThinkingConfig(),
+        thinking_config: ThinkingConfig | None = None,
         system_message: str | None = None,
         max_tokens: int | None = None,
         tools: None = None,
@@ -358,7 +391,7 @@ class BaseLLMClientAsync(ABC, utils.InheritDecoratorsMixin):
         messages: list[Content],
         result_type: Literal["json"],
         *,
-        thinking_config: ThinkingConfig = ThinkingConfig(),
+        thinking_config: ThinkingConfig | None = None,
         system_message: str | None = None,
         max_tokens: int | None = None,
         tools: None = None,
@@ -370,7 +403,7 @@ class BaseLLMClientAsync(ABC, utils.InheritDecoratorsMixin):
         messages: list[Content],
         result_type: type[PydanticStructure],
         *,
-        thinking_config: ThinkingConfig = ThinkingConfig(),
+        thinking_config: ThinkingConfig | None = None,
         system_message: str | None = None,
         max_tokens: int | None = None,
         tools: None = None,
@@ -382,7 +415,7 @@ class BaseLLMClientAsync(ABC, utils.InheritDecoratorsMixin):
         messages: list[Content],
         result_type: Literal["tools"],
         *,
-        thinking_config: ThinkingConfig = ThinkingConfig(),
+        thinking_config: ThinkingConfig | None = None,
         system_message: str | None = None,
         max_tokens: int | None = None,
         tools: list[Tool],
@@ -394,12 +427,12 @@ class BaseLLMClientAsync(ABC, utils.InheritDecoratorsMixin):
         messages: list[Content],
         result_type: ResultType | Literal["tools"] = None,
         *,
-        thinking_config: ThinkingConfig = ThinkingConfig(),
+        thinking_config: ThinkingConfig | None = None,
         system_message: str | None = None,
         max_tokens: int | None = None,
         tools: list[Tool] | None = None,
         tool_choice_mode: Literal["ANY", "NONE"] = "NONE",
-        autocomplete: bool = False
+        autocomplete: bool = False,
     ):
         if result_type == "tools":
             response = await self.create(
@@ -454,7 +487,14 @@ class BaseLLMClientAsync(ABC, utils.InheritDecoratorsMixin):
     @logfire_decorators.create_stream_async
     @utils.retry_cls_async
     @utils.rpm_limit_cls_async
-    async def create_stream(self, messages: list[Content], *, system_message: str | None = None, max_tokens: int | None = None) -> AsyncIterator[Response]:
+    async def create_stream(
+        self,
+        messages: list[Content],
+        *,
+        thinking_config: ThinkingConfig | None = None,
+        system_message: str | None = None,
+        max_tokens: int | None = None,
+    ) -> AsyncIterator[Response]:
         raise NotImplementedError
     
     @overload
@@ -463,7 +503,7 @@ class BaseLLMClientAsync(ABC, utils.InheritDecoratorsMixin):
         prompt: str,
         result_type: None = None,
         *,
-        thinking_config: ThinkingConfig = ThinkingConfig(),
+        thinking_config: ThinkingConfig | None = None,
         system_message: str | None = None,
         max_tokens: int | None = None,
         tools: None = None,
@@ -475,7 +515,7 @@ class BaseLLMClientAsync(ABC, utils.InheritDecoratorsMixin):
         prompt: str,
         result_type: Literal["json"],
         *,
-        thinking_config: ThinkingConfig = ThinkingConfig(),
+        thinking_config: ThinkingConfig | None = None,
         system_message: str | None = None,
         max_tokens: int | None = None,
         tools: None = None,
@@ -487,7 +527,7 @@ class BaseLLMClientAsync(ABC, utils.InheritDecoratorsMixin):
         prompt: str,
         result_type: type[PydanticStructure],
         *,
-        thinking_config: ThinkingConfig = ThinkingConfig(),
+        thinking_config: ThinkingConfig | None = None,
         system_message: str | None = None,
         max_tokens: int | None = None,
         tools: None = None,
@@ -499,7 +539,7 @@ class BaseLLMClientAsync(ABC, utils.InheritDecoratorsMixin):
         prompt: str,
         result_type: Literal["tools"],
         *,
-        thinking_config: ThinkingConfig = ThinkingConfig(),
+        thinking_config: ThinkingConfig | None = None,
         system_message: str | None = None,
         max_tokens: int | None = None,
         tools: list[Tool],
@@ -511,7 +551,7 @@ class BaseLLMClientAsync(ABC, utils.InheritDecoratorsMixin):
         prompt: str,
         result_type: ResultType | Literal["tools"] = None,
         *,
-        thinking_config: ThinkingConfig = ThinkingConfig(),
+        thinking_config: ThinkingConfig | None = None,
         system_message: str | None = None,
         max_tokens: int | None = None,
         tools: list[Tool] | None = None,
@@ -534,7 +574,13 @@ class CachedLLMClient(BaseLLMClient):
         return self.llm_client.api_key
 
     def __init__(self, llm_client: BaseLLMClient, cache_dir: str = "data/llm_cache"):
-        super().__init__(provider=llm_client.provider, model=llm_client.model, decorator_configs=llm_client._decorator_configs, default_max_tokens=llm_client.default_max_tokens)
+        super().__init__(
+            provider=llm_client.provider,
+            model=llm_client.model,
+            decorator_configs=llm_client._decorator_configs,
+            default_thinking_config=llm_client.default_thinking_config,
+            default_max_tokens=llm_client.default_max_tokens,
+        )
         self.provider = llm_client.provider
         self.llm_client = llm_client
         self.cache_dir = cache_dir
