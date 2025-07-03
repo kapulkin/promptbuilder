@@ -1,16 +1,42 @@
 import os
 import json
 import base64
-from typing import AsyncIterator, Iterator
+from functools import wraps
+from typing import AsyncIterator, Iterator, Callable, ParamSpec, Awaitable
 
 from pydantic import BaseModel
-from openai import OpenAI, AsyncOpenAI, Stream, AsyncStream
+from openai import OpenAI, AsyncOpenAI, Stream, AsyncStream, APIError as OpenAIAPIError
 from openai.types.responses import ResponseStreamEvent
 
 from promptbuilder.llm_client.base_client import BaseLLMClient, BaseLLMClientAsync, ResultType
 from promptbuilder.llm_client.types import Response, Content, Candidate, UsageMetadata, Part, ThinkingConfig, Tool, ToolConfig, FunctionCall, MessageDict, Model
 from promptbuilder.llm_client.config import DecoratorConfigs
+from promptbuilder.llm_client.utils import inherited_decorator
+from promptbuilder.llm_client.exceptions import APIError
 
+
+P = ParamSpec("P")
+
+
+@inherited_decorator
+def _error_handler(func: Callable[P, Response]) -> Callable[P, Response]:
+    """
+    Decorator to catch error from openai and transform it into unified one
+    """
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        try:
+            return func(*args, **kwargs)
+        except OpenAIAPIError as e:
+            code = getattr(e, "status_code", None) or e.code
+            response = getattr(e, "response", None)
+            status = getattr(response, "reason_phrase", None)
+            response_json = {
+                "status": status,
+                "message": e.message,
+            }
+            raise APIError(code, response_json, response)
+    return wrapper
 
 class OpenaiStreamIterator:
     def __init__(self, openai_iterator: Stream[ResponseStreamEvent]):
@@ -113,6 +139,7 @@ class OpenaiLLMClient(BaseLLMClient):
                     openai_thinking_config["reasoning"] = {"effort": "high"}
         return openai_thinking_config
 
+    @_error_handler
     def create(
         self,
         messages: list[Content],
@@ -223,7 +250,8 @@ class OpenaiLLMClient(BaseLLMClient):
             )
         else:
             raise ValueError(f"Unsupported result type: {result_type}. Supported types are None, 'json', or a Pydantic model class.")
-        
+    
+    @_error_handler
     def create_stream(
         self,
         messages: list[Content],
@@ -277,6 +305,26 @@ class OpenaiLLMClient(BaseLLMClient):
         return models
 
 
+@inherited_decorator
+def _error_handler_async(func: Callable[P, Awaitable[Response]]) -> Callable[P, Awaitable[Response]]:
+    """
+    Decorator to catch error from openai and transform it into unified one
+    """
+    @wraps(func)
+    async def wrapper(*args, **kwargs):
+        try:
+            return await func(*args, **kwargs)
+        except OpenAIAPIError as e:
+            code = getattr(e, "status_code", None) or e.code
+            response = getattr(e, "response", None)
+            status = getattr(response, "reason_phrase", None)
+            response_json = {
+                "status": status,
+                "message": e.message,
+            }
+            raise APIError(code, response_json, response)
+    return wrapper
+
 class OpenaiStreamIteratorAsync:
     def __init__(self, openai_iterator: AsyncStream[ResponseStreamEvent]):
         self._openai_iterator = openai_iterator
@@ -324,6 +372,7 @@ class OpenaiLLMClientAsync(BaseLLMClientAsync):
     def api_key(self) -> str:
         return self._api_key
     
+    @_error_handler_async
     async def create(
         self,
         messages: list[Content],
@@ -441,7 +490,8 @@ class OpenaiLLMClientAsync(BaseLLMClientAsync):
             )
         else:
             raise ValueError(f"Unsupported result_type: {result_type}. Supported types are: None, 'json', or a Pydantic model.")
-        
+    
+    @_error_handler_async
     async def create_stream(
         self,
         messages: list[Content],
