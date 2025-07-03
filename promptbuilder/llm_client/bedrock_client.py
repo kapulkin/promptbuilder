@@ -1,16 +1,23 @@
 import os
-from typing import AsyncIterator, Iterator, Any
+from functools import wraps
+from typing import AsyncIterator, Iterator, Any, Callable, ParamSpec, Awaitable
 
 import boto3
+from boto3.exceptions import Boto3Error
 import aioboto3
 from pydantic import BaseModel, ConfigDict
 from botocore.eventstream import EventStream
+from botocore.exceptions import ClientError, BotoCoreError
 
 from promptbuilder.llm_client.base_client import BaseLLMClient, BaseLLMClientAsync, ResultType
 from promptbuilder.llm_client.types import Response, Content, Candidate, UsageMetadata, Part, ThinkingConfig, Tool, ToolConfig, FunctionCall, CustomApiKey, Model
 from promptbuilder.llm_client.config import DecoratorConfigs
 from promptbuilder.prompt_builder import PromptBuilder
+from promptbuilder.llm_client.utils import inherited_decorator
+from promptbuilder.llm_client.exceptions import APIError
 
+
+P = ParamSpec("P")
 
 class BedrockApiKey(BaseModel, CustomApiKey):
     model_config = ConfigDict(frozen=True)
@@ -19,6 +26,26 @@ class BedrockApiKey(BaseModel, CustomApiKey):
     aws_secret_access_key: str = os.getenv("AWS_SECRET_ACCESS_KEY")
     aws_region: str = os.getenv("AWS_DEFAULT_REGION", "us-east-1")
 
+
+@inherited_decorator
+def _error_handler(func: Callable[P, Response]) -> Callable[P, Response]:
+    """
+    Decorator to catch error from boto libs and transform it into unified one
+    """
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        try:
+            return func(*args, **kwargs)
+        except (Boto3Error, BotoCoreError, ClientError) as e:
+            code = None
+            response = None
+            status = None
+            response_json = {
+                "status": status,
+                "message": str(e.args),
+            }
+            raise APIError(code, response_json, response)
+    return wrapper
 
 class BedrockStreamIterator:
     def __init__(self, bedrock_iterator: EventStream):
@@ -69,6 +96,7 @@ class BedrockLLMClient(BaseLLMClient):
     def api_key(self) -> BedrockApiKey:
         return self._api_key
     
+    @_error_handler
     def create(
         self,
         messages: list[Content],
@@ -226,7 +254,8 @@ class BedrockLLMClient(BaseLLMClient):
                 ),
                 parsed=parsed_pydantic,
             )
-        
+    
+    @_error_handler
     def create_stream(
         self,
         messages: list[Content],
@@ -277,6 +306,27 @@ class BedrockLLMClient(BaseLLMClient):
                 display_name=bedrock_model["inferenceProfileName"],
             ))
         return models
+
+
+@inherited_decorator
+def _error_handler_async(func: Callable[P, Awaitable[Response]]) -> Callable[P, Awaitable[Response]]:
+    """
+    Decorator to catch error from boto libs and transform it into unified one
+    """
+    @wraps(func)
+    async def wrapper(*args, **kwargs):
+        try:
+            return await func(*args, **kwargs)
+        except (Boto3Error, BotoCoreError, ClientError) as e:
+            code = None
+            response = None
+            status = None
+            response_json = {
+                "status": status,
+                "message": str(e.args),
+            }
+            raise APIError(code, response_json, response)
+    return wrapper
 
 class BedrockStreamIteratorAsync:
     def __init__(self, aioboto_session: aioboto3.Session, **bedrock_kwargs):
@@ -336,6 +386,7 @@ class BedrockLLMClientAsync(BaseLLMClientAsync):
     def api_key(self) -> BedrockApiKey:
         return self._api_key
     
+    @_error_handler_async
     async def create(
         self,
         messages: list[Content],
@@ -487,7 +538,8 @@ class BedrockLLMClientAsync(BaseLLMClientAsync):
                     ),
                     parsed=parsed_pydantic,
                 )
-        
+    
+    @_error_handler_async
     async def create_stream(
         self,
         messages: list[Content],

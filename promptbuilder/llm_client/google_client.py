@@ -1,12 +1,42 @@
 import os
-from typing import AsyncIterator, Iterator
+from functools import wraps
+from typing import AsyncIterator, Iterator, Callable, ParamSpec, Awaitable
 
 from pydantic import BaseModel
+from tenacity import RetryError
 from google.genai import Client, types
 
 from promptbuilder.llm_client.base_client import BaseLLMClient, BaseLLMClientAsync, ResultType
 from promptbuilder.llm_client.types import Response, Content, Part, ThinkingConfig, Tool, ToolConfig, Model
 from promptbuilder.llm_client.config import DecoratorConfigs
+from promptbuilder.llm_client.utils import inherited_decorator
+from promptbuilder.llm_client.exceptions import APIError
+
+
+P = ParamSpec("P")
+
+
+@inherited_decorator
+def _error_handler(func: Callable[P, Response]) -> Callable[P, Response]:
+    """
+    Decorator to catch error from google.genai and transform it into unified one
+    """
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        try:
+            return func(*args, **kwargs)
+        except RetryError as retry_error:
+            e = retry_error.last_attempt._exception
+            if e is None:
+                raise APIError()
+            code = e.code
+            response_json = {
+                "status": e.status,
+                "message": e.message,
+            }
+            response = e.response
+            raise APIError(code, response_json, response)
+    return wrapper
 
 
 class GoogleLLMClient(BaseLLMClient):
@@ -53,7 +83,8 @@ class GoogleLLMClient(BaseLLMClient):
             )
             new_messages.append(new_message)
         return new_messages
-        
+    
+    @_error_handler
     def create(
         self,
         messages: list[Content],
@@ -103,7 +134,8 @@ class GoogleLLMClient(BaseLLMClient):
             )
         else:
             raise ValueError(f"Unsupported result_type: {result_type}. Supported types are: None, 'json', or a Pydantic model.")
-        
+    
+    @_error_handler
     def create_stream(
         self,
         messages: list[Content],
@@ -159,6 +191,28 @@ class GoogleLLMClient(BaseLLMClient):
         return models
 
 
+@inherited_decorator
+def _error_handler_async(func: Callable[P, Awaitable[Response]]) -> Callable[P, Awaitable[Response]]:
+    """
+    Decorator to catch error from google.genai and transform it into unified one
+    """
+    @wraps(func)
+    async def wrapper(*args, **kwargs):
+        try:
+            return await func(*args, **kwargs)
+        except RetryError as retry_error:
+            e = retry_error.last_attempt._exception
+            if e is None:
+                raise APIError()
+            code = e.code
+            response_json = {
+                "status": e.status,
+                "message": e.message,
+            }
+            response = e.response
+            raise APIError(code, response_json, response)
+    return wrapper
+
 class GoogleLLMClientAsync(BaseLLMClientAsync):
     PROVIDER: str = "google"
     
@@ -181,6 +235,7 @@ class GoogleLLMClientAsync(BaseLLMClientAsync):
     def api_key(self) -> str:
         return self._api_key
 
+    @_error_handler_async
     async def create(
         self,
         messages: list[Content],
@@ -222,7 +277,8 @@ class GoogleLLMClientAsync(BaseLLMClientAsync):
             )
         else:
             raise ValueError(f"Unsupported result_type: {result_type}. Supported types are: None, 'json', or a Pydantic model.")
-        
+    
+    @_error_handler_async
     async def create_stream(
         self,
         messages: list[Content],

@@ -4,4 +4,8 @@ aisuite-async
 google-genai
 anthropic
 openai
+boto3
 aioboto3
+botocore
+httpx
+aiohttp
