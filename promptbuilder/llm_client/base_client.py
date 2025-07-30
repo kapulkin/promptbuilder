@@ -5,6 +5,7 @@ import hashlib
 import logging
 from abc import ABC, abstractmethod
 from typing import Iterator, AsyncIterator, Literal, overload
+from pydantic import BaseModel
 
 from promptbuilder.llm_client.types import Response, Content, Part, Tool, ToolConfig, FunctionCall, FunctionCallingConfig, Json, ThinkingConfig, ApiKey, PydanticStructure, ResultType, FinishReason
 import promptbuilder.llm_client.utils as utils
@@ -605,7 +606,12 @@ class CachedLLMClient(BaseLLMClient):
                 with open(cache_path, "rt") as f:
                     cache_data = json.load(f)
                     if cache_data["full_model_name"] == llm_client.full_model_name and json.dumps(cache_data["request"]) == json.dumps(messages_dump):
-                        return Response(**cache_data["response"]), messages_dump, cache_path
+                        response = Response(**cache_data["response"])
+                        result_type = kwargs.get("result_type", None)
+                        if result_type is not None and isinstance(result_type, type(BaseModel)):
+                            response.parsed = result_type.model_validate(response.parsed)
+
+                        return response, messages_dump, cache_path
                     else:
                         logger.debug(f"Cache mismatch for {key}")
             except (json.JSONDecodeError, KeyError) as e:
@@ -637,4 +643,3 @@ class CachedLLMClientAsync(BaseLLMClientAsync):
         response = await self.llm_client.create(messages, **kwargs)
         CachedLLMClient.save_cache(cache_path, self.llm_client.full_model_name, messages_dump, response)
         return response
-

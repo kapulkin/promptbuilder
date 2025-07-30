@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name="promptbuilder",
-    version="0.4.21",
+    version="0.4.22",
     packages=find_packages(),
     install_requires=[
         "pydantic",
