@@ -22,9 +22,9 @@ P = ParamSpec("P")
 class BedrockApiKey(BaseModel, CustomApiKey):
     model_config = ConfigDict(frozen=True)
     
-    aws_access_key_id: str = os.getenv("AWS_ACCESS_KEY_ID")
-    aws_secret_access_key: str = os.getenv("AWS_SECRET_ACCESS_KEY")
-    aws_region: str = os.getenv("AWS_DEFAULT_REGION", "us-east-1")
+    aws_access_key_id: str
+    aws_secret_access_key: str
+    aws_region: str
 
 
 @inherited_decorator
@@ -78,13 +78,19 @@ class BedrockLLMClient(BaseLLMClient):
     def __init__(
         self,
         model: str,
-        api_key: BedrockApiKey = BedrockApiKey(),
+        api_key: BedrockApiKey | None = None,
         decorator_configs: DecoratorConfigs | None = None,
         default_thinking_config: ThinkingConfig | None = None,
         default_max_tokens: int | None = None,
         **kwargs,
     ):
-        if api_key is None or not isinstance(api_key, BedrockApiKey):
+        if api_key is None:
+            api_key = BedrockApiKey(
+                aws_access_key_id=os.getenv("AWS_ACCESS_KEY_ID"),
+                aws_secret_access_key=os.getenv("AWS_SECRET_ACCESS_KEY"),
+                aws_region=os.getenv("AWS_DEFAULT_REGION", "us-east-1"),
+            )
+        if not isinstance(api_key, BedrockApiKey):
             raise ValueError(
                 "To create a bedrock llm client you need to either set the environment variables "
                 "AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, and optional AWS_DEFAULT_REGION or pass the api_key as BedrockApiKey instance"
@@ -363,13 +369,19 @@ class BedrockLLMClientAsync(BaseLLMClientAsync):
     def __init__(
         self,
         model: str,
-        api_key: BedrockApiKey = BedrockApiKey(),
+        api_key: BedrockApiKey | None = None,
         decorator_configs: DecoratorConfigs | None = None,
         default_thinking_config: ThinkingConfig | None = None,
         default_max_tokens: int | None = None,
         **kwargs,
     ):
-        if api_key is None or not isinstance(api_key, BedrockApiKey):
+        if api_key is None:
+            api_key = BedrockApiKey(
+                aws_access_key_id=os.getenv("AWS_ACCESS_KEY_ID"),
+                aws_secret_access_key=os.getenv("AWS_SECRET_ACCESS_KEY"),
+                aws_region=os.getenv("AWS_DEFAULT_REGION", "us-east-1"),
+            )
+        if not isinstance(api_key, BedrockApiKey):
             raise ValueError(
                 "To create a bedrock llm client you need to either set the environment variables "
                 "AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, and optional AWS_DEFAULT_REGION or pass the api_key as BedrockApiKey instance"

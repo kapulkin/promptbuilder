@@ -40,10 +40,7 @@ def get_client(
     provider, model = full_model_name.split(":", 1)
     if provider in provider_to_client_class:
         client_class = provider_to_client_class[provider]
-        if api_key is None:
-            client = client_class(model, **kwargs)
-        else:
-            client = client_class(model, api_key, **kwargs)
+        client = client_class(model, api_key, **kwargs)
     else:
         if api_key is None:
             raise ValueError(f"You should directly provide api_key for this provider: {provider}")
@@ -87,10 +84,7 @@ def get_async_client(
     provider, model = full_model_name.split(":", 1)
     if provider in provider_to_client_class:
         client_class = provider_to_client_class[provider]
-        if api_key is None:
-            client = client_class(model, **kwargs)
-        else:
-            client = client_class(model, api_key, **kwargs)
+        client = client_class(model, api_key, **kwargs)
     else:
         if api_key is None:
             raise ValueError(f"You should directly provide api_key for this provider: {provider}")

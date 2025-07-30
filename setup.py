@@ -2,13 +2,13 @@ from setuptools import setup, find_packages
 
 setup(
     name="promptbuilder",
-    version="0.4.20",
+    version="0.4.21",
     packages=find_packages(),
     install_requires=[
         "pydantic",
         "pytest",
         "aisuite-async",
-        "google-genai>=1.4.0,<=1.21.0",
+        "google-genai>=1.4.0",
         "anthropic",
         "openai",
         "aioboto3"

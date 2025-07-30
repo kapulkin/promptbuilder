@@ -136,13 +136,15 @@ class AnthropicLLMClient(BaseLLMClient):
     def __init__(
         self,
         model: str,
-        api_key: str = os.getenv("ANTHROPIC_API_KEY"),
+        api_key: str | None = None,
         decorator_configs: DecoratorConfigs | None = None,
         default_thinking_config: ThinkingConfig | None = None,
         default_max_tokens: int | None = None,
         default_max_tokens_strategy: DefaultMaxTokensStrategy = AnthropicDefaultMaxTokensStrategy(),
         **kwargs,
     ):
+        if api_key is None:
+            api_key = os.getenv("ANTHROPIC_API_KEY")
         if api_key is None or not isinstance(api_key, str):
             raise ValueError("To create an anthropic llm client you need to either set the environment variable ANTHROPIC_API_KEY or pass the api_key in string format")
         super().__init__(AnthropicLLMClient.PROVIDER, model, decorator_configs=decorator_configs, default_thinking_config=default_thinking_config, default_max_tokens=default_max_tokens)
@@ -422,13 +424,15 @@ class AnthropicLLMClientAsync(BaseLLMClientAsync):
     def __init__(
         self,
         model: str,
-        api_key: str = os.getenv("ANTHROPIC_API_KEY"),
+        api_key: str | None = None,
         decorator_configs: DecoratorConfigs | None = None,
         default_thinking_config: ThinkingConfig | None = None,
         default_max_tokens: int | None = None,
         default_max_tokens_strategy: DefaultMaxTokensStrategy = AnthropicDefaultMaxTokensStrategy(),
         **kwargs,
     ):
+        if api_key is None:
+            api_key = os.getenv("ANTHROPIC_API_KEY")
         if api_key is None or not isinstance(api_key, str):
             raise ValueError("To create an anthropic llm client you need to either set the environment variable ANTHROPIC_API_KEY or pass the api_key in string format")
         super().__init__(AnthropicLLMClientAsync.PROVIDER, model, decorator_configs=decorator_configs, default_thinking_config=default_thinking_config, default_max_tokens=default_max_tokens)
