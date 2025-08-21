@@ -1,9 +1,9 @@
 import logging
 from abc import ABC, abstractmethod
-from typing import Optional, Any, Callable, Literal, TypeVar, Self
+from typing import Optional, Any, Callable, Literal, TypeVar, Self, Protocol, runtime_checkable
 from enum import Enum
 
-from pydantic import BaseModel, model_validator
+from pydantic import BaseModel, model_validator, ConfigDict
 
 
 logger = logging.getLogger(__name__)
@@ -15,6 +15,16 @@ type JsonType = Literal["string", "number", "integer", "boolean", "array", "obje
 PydanticStructure = TypeVar("PydanticStructure", bound=BaseModel)
 
 type ResultType = Literal["json"] | type[PydanticStructure] | None
+
+
+@runtime_checkable
+class PartLike(Protocol):
+    """Protocol for Part-like objects that have the same interface as Part."""
+    text: Optional[str]
+    function_call: Optional[Any]  # Using Any to allow different FunctionCall types
+    function_response: Optional[Any]  # Using Any to allow different FunctionResponse types
+    thought: Optional[bool]
+    inline_data: Optional[Any]  # Using Any to allow different Blob types
 
 
 class CustomApiKey(ABC):
@@ -80,14 +90,16 @@ class Part(BaseModel):
         return cls(inline_data=inline_data)
 
 class Content(BaseModel):
-    parts: Optional[list[Part]] = None
-    role: Optional[Role] = None
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+    
+    parts: list[Part | PartLike] | None = None
+    role: Role | None = None
     
     def as_str(self) -> str:
         if self.parts is None:
             return ""
         else:
-            return "\n".join([part.as_str() for part in self.parts])
+            return "\n".join([(part.text or "") for part in self.parts])
 
 
 class FinishReason(Enum):
