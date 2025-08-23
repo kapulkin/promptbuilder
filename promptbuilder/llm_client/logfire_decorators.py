@@ -184,7 +184,7 @@ def create_stream(class_method: Callable[P, Iterable[Response]]) -> Callable[P, 
     return wrapper
 
 @inherited_decorator
-def create_stream_async(class_method: Callable[P, AsyncIterable[Response]]) -> Callable[P, AsyncIterable[Response]]:
+def create_stream_async(class_method: Callable[P, Awaitable[AsyncIterable[Response]]]) -> Callable[P, Awaitable[AsyncIterable[Response]]]:
     """
     Decorator to log llm client's async create_stream method using logfire
     """    

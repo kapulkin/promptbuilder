@@ -1,9 +1,9 @@
 import logging
 from abc import ABC, abstractmethod
-from typing import Optional, Any, Callable, Literal, TypeVar, Self
+from typing import Optional, Any, Callable, Literal, TypeVar
 from enum import Enum
 
-from pydantic import BaseModel, model_validator
+from pydantic import BaseModel
 
 
 logger = logging.getLogger(__name__)
@@ -15,6 +15,17 @@ type JsonType = Literal["string", "number", "integer", "boolean", "array", "obje
 PydanticStructure = TypeVar("PydanticStructure", bound=BaseModel)
 
 type ResultType = Literal["json"] | type[PydanticStructure] | None
+
+
+def sum_optional_ints(a: int | None, b: int | None) -> int | None:
+    if a is None and b is None:
+        return None
+    elif a is None:
+        return b
+    elif b is None:
+        return a
+    else:
+        return a + b
 
 
 class CustomApiKey(ABC):
@@ -71,17 +82,40 @@ class Part(BaseModel):
         return ""
 
     @classmethod
-    def from_bytes(cls, *, data: bytes, mime_type: str, display_name: str | None = None) -> 'Part':
+    def from_bytes(cls, *, data: bytes, mime_type: str, display_name: str | None = None) -> "Part":
         inline_data = Blob(
             data=data,
             mime_type=mime_type,
-            display_name=display_name
+            display_name=display_name,
         )
         return cls(inline_data=inline_data)
 
 class Content(BaseModel):
     parts: Optional[list[Part]] = None
     role: Optional[Role] = None
+    
+    def extend(self, other: "Content"):
+        assert self.role == other.role
+        
+        if self.parts is None:
+            self.parts = other.parts
+        else:
+            if other.parts is not None:
+                if len(self.parts) == 0 or len(other.parts) == 0:
+                    self.parts.extend(other.parts)
+                else:
+                    part_was_merged: bool = False
+                    if self.parts[-1].text is not None and other.parts[0].text is not None:
+                        self.parts[-1].text += other.parts[0].text
+                        part_was_merged = True
+                    elif self.parts[-1].thought is not None and other.parts[0].thought is not None:
+                        self.parts[-1].thought += other.parts[0].thought
+                        part_was_merged = True
+                    
+                    if part_was_merged:
+                        self.parts.extend(other.parts[1:])
+                    else:
+                        self.parts.extend(other.parts)
     
     def as_str(self) -> str:
         if self.parts is None:
@@ -126,6 +160,16 @@ class FinishReason(Enum):
 class Candidate(BaseModel):
     content: Optional[Content] = None
     finish_reason: Optional[FinishReason] = None
+    
+    def extend(self, other: "Candidate"):
+        if other.finish_reason is not None:
+            self.finish_reason = other.finish_reason
+
+        if self.content is None:
+            self.content = other.content
+        else:
+            if other.content is not None:
+                self.content.extend(other.content)
 
 class UsageMetadata(BaseModel):
     cached_content_token_count: Optional[int] = None
@@ -141,6 +185,40 @@ class Response(BaseModel):
     candidates: Optional[list[Candidate]] = None
     usage_metadata: Optional[UsageMetadata] = None
     parsed: Optional[Json | PydanticStructure] = None
+    
+    def extend(self, other: "Response"):
+        if other.candidates is None:
+            pass
+        elif self.candidates is None:
+            self.candidates = other.candidates
+        else:
+            assert len(self.candidates) == len(other.candidates)
+            
+            for self_candidate, other_candidate in zip(self.candidates, other.candidates):
+                self_candidate.extend(other_candidate)
+            
+        if other.usage_metadata is None:
+            pass
+        elif self.usage_metadata is None:
+            self.usage_metadata = other.usage_metadata
+        else:
+            self.usage_metadata.cached_content_token_count = sum_optional_ints(
+                self.usage_metadata.cached_content_token_count,
+                other.usage_metadata.cached_content_token_count,
+            )
+            self.usage_metadata.candidates_token_count = sum_optional_ints(
+                self.usage_metadata.candidates_token_count,
+                other.usage_metadata.candidates_token_count,
+            )
+            self.usage_metadata.prompt_token_count = sum_optional_ints(
+                self.usage_metadata.prompt_token_count,
+                other.usage_metadata.prompt_token_count,
+            )
+            self.usage_metadata.total_token_count = sum_optional_ints(
+                self.usage_metadata.total_token_count,
+                other.usage_metadata.total_token_count,
+            )
+    
 
     @property
     def text(self) -> Optional[str]:
@@ -208,6 +286,12 @@ class FunctionCallingConfig(BaseModel):
 
 class ToolConfig(BaseModel):
     function_calling_config: Optional[FunctionCallingConfig] = None
+
+class AutocompletionConfig(BaseModel):
+    print_first_text_symbols: Optional[int] = None
+    max_tokens: Optional[int] = None
+    max_steps: Optional[int] = None
+    
 
 class Model(BaseModel):
     full_model_name: str

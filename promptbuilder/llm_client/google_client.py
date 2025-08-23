@@ -39,6 +39,15 @@ def _error_handler(func: Callable[P, Response]) -> Callable[P, Response]:
     return wrapper
 
 
+class GoogleStreamIterator:
+    def __init__(self, google_iterator: Iterator[types.GenerateContentResponse]):
+        self._google_iterator = google_iterator
+
+    def __iter__(self) -> Iterator[Response]:
+        for next_event in self._google_iterator:
+            yield Response(**next_event.model_dump())
+
+
 class GoogleLLMClient(BaseLLMClient):
     PROVIDER: str = "google"
     
@@ -84,6 +93,8 @@ class GoogleLLMClient(BaseLLMClient):
                 parts=new_parts
             )
             new_messages.append(new_message)
+        
+        new_messages = [types.Content(**message.model_dump()) for message in new_messages]
         return new_messages
     
     @_error_handler
@@ -99,6 +110,7 @@ class GoogleLLMClient(BaseLLMClient):
         tool_config: ToolConfig = ToolConfig(),
     ) -> Response:
         messages = self._preprocess_messages(messages)
+        
         if max_tokens is None:
             max_tokens = self.default_max_tokens
         config = types.GenerateContentConfig(
@@ -113,27 +125,29 @@ class GoogleLLMClient(BaseLLMClient):
         config.thinking_config = thinking_config
         
         if result_type is None:
-            return self.client.models.generate_content(
+            google_response = self.client.models.generate_content(
                 model=self.model,
                 contents=messages,
                 config=config,
             )
+            return Response(**google_response.model_dump())
         elif result_type == "json":
-            response = self.client.models.generate_content(
+            google_response = self.client.models.generate_content(
                 model=self.model,
                 contents=messages,
                 config=config,
             )
-            response.parsed = BaseLLMClient.as_json(response.text)
-            return response
+            google_response.parsed = BaseLLMClient.as_json(google_response.text)
+            return Response(**google_response.model_dump())
         elif isinstance(result_type, type(BaseModel)):
             config.response_mime_type = "application/json"
             config.response_schema = result_type
-            return self.client.models.generate_content(
+            google_response = self.client.models.generate_content(
                 model=self.model,
                 contents=messages,
                 config=config,
             )
+            return Response(**google_response.model_dump())
         else:
             raise ValueError(f"Unsupported result_type: {result_type}. Supported types are: None, 'json', or a Pydantic model.")
     
@@ -146,6 +160,8 @@ class GoogleLLMClient(BaseLLMClient):
         system_message: str | None = None,
         max_tokens: int | None = None,
     ) -> Iterator[Response]:
+        messages = self._preprocess_messages(messages)
+        
         if max_tokens is None:
             max_tokens = self.default_max_tokens
         config = types.GenerateContentConfig(
@@ -162,7 +178,7 @@ class GoogleLLMClient(BaseLLMClient):
             contents=messages,
             config=config,
         )
-        return response
+        return GoogleStreamIterator(response)
     
     @staticmethod
     def models_list() -> list[Model]:
@@ -215,6 +231,14 @@ def _error_handler_async(func: Callable[P, Awaitable[Response]]) -> Callable[P, 
             raise APIError(code, response_json, response)
     return wrapper
 
+class GoogleStreamIteratorAsync:
+    def __init__(self, google_iterator: AsyncIterator[types.GenerateContentResponse]):
+        self._google_iterator = google_iterator
+
+    async def __aiter__(self) -> AsyncIterator[Response]:
+        async for next_event in self._google_iterator:
+            yield Response(**next_event.model_dump())
+
 class GoogleLLMClientAsync(BaseLLMClientAsync):
     PROVIDER: str = "google"
     
@@ -265,20 +289,30 @@ class GoogleLLMClientAsync(BaseLLMClientAsync):
             thinking_config = self.default_thinking_config
         config.thinking_config = thinking_config
         
-        if result_type is None or result_type == "json":
-            return await self.client.aio.models.generate_content(
+        if result_type is None:
+            google_response = await self.client.aio.models.generate_content(
                 model=self.model,
                 contents=messages,
                 config=config,
             )
+            return Response(**google_response.model_dump())
+        elif result_type == "json":
+            google_response = await self.client.aio.models.generate_content(
+                model=self.model,
+                contents=messages,
+                config=config,
+            )
+            google_response.parsed = BaseLLMClient.as_json(google_response.text)
+            return Response(**google_response.model_dump())
         elif isinstance(result_type, type(BaseModel)):
             config.response_mime_type = "application/json"
             config.response_schema = result_type
-            return await self.client.aio.models.generate_content(
+            google_response = await self.client.aio.models.generate_content(
                 model=self.model,
                 contents=messages,
                 config=config,
             )
+            return Response(**google_response.model_dump())
         else:
             raise ValueError(f"Unsupported result_type: {result_type}. Supported types are: None, 'json', or a Pydantic model.")
     
@@ -291,6 +325,8 @@ class GoogleLLMClientAsync(BaseLLMClientAsync):
         system_message: str | None = None,
         max_tokens: int | None = None,
     ) -> AsyncIterator[Response]:
+        messages = GoogleLLMClient._preprocess_messages(messages)
+        
         if max_tokens is None:
             max_tokens = self.default_max_tokens
         config = types.GenerateContentConfig(
@@ -307,7 +343,7 @@ class GoogleLLMClientAsync(BaseLLMClientAsync):
             contents=messages,
             config=config,
         )
-        return response
+        return GoogleStreamIteratorAsync(response)
 
     @staticmethod
     def models_list() -> list[Model]:
