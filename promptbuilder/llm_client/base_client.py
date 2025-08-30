@@ -74,9 +74,6 @@ class BaseLLMClient(ABC, utils.InheritDecoratorsMixin):
         except json.JSONDecodeError as e:
             raise ValueError(f"Failed to parse LLM response as JSON:\n{text}")
 
-    @logfire_decorators.create
-    @utils.retry_cls
-    @utils.rpm_limit_cls
     def create(
         self,
         messages: list[Content],
@@ -124,6 +121,9 @@ class BaseLLMClient(ABC, utils.InheritDecoratorsMixin):
                 break
         return response
 
+    @logfire_decorators.create
+    @utils.retry_cls
+    @utils.rpm_limit_cls
     @abstractmethod
     def _create(
         self,
@@ -406,9 +406,6 @@ class BaseLLMClientAsync(ABC, utils.InheritDecoratorsMixin):
         """Return the model identifier"""
         return self.provider + ":" + self.model
     
-    @logfire_decorators.create_async
-    @utils.retry_cls_async
-    @utils.rpm_limit_cls_async
     async def create(
         self,
         messages: list[Content],
@@ -456,6 +453,9 @@ class BaseLLMClientAsync(ABC, utils.InheritDecoratorsMixin):
                 break
         return response
 
+    @logfire_decorators.create_async
+    @utils.retry_cls_async
+    @utils.rpm_limit_cls_async
     @abstractmethod
     async def _create(
         self,
