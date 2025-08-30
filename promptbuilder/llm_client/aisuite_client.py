@@ -63,7 +63,7 @@ class AiSuiteLLMClient(BaseLLMClient):
             total_token_count=usage.total_tokens if hasattr(usage, "total_tokens") else usage["total_tokens"],
         )
 
-    def create(
+    def _create(
         self,
         messages: list[Content],
         result_type: ResultType = None,
@@ -222,7 +222,7 @@ class AiSuiteLLMClientAsync(BaseLLMClientAsync):
             total_token_count=usage.total_tokens if hasattr(usage, "total_tokens") else usage["total_tokens"],
         )
 
-    async def create(
+    async def _create(
         self,
         messages: list[Content],
         result_type: ResultType = None,

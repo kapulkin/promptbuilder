@@ -77,8 +77,55 @@ class BaseLLMClient(ABC, utils.InheritDecoratorsMixin):
     @logfire_decorators.create
     @utils.retry_cls
     @utils.rpm_limit_cls
-    @abstractmethod
     def create(
+        self,
+        messages: list[Content],
+        result_type: ResultType = None,
+        *,
+        thinking_config: ThinkingConfig | None = None,
+        system_message: str | None = None,
+        max_tokens: int | None = None,
+        tools: list[Tool] | None = None,
+        tool_config: ToolConfig = ToolConfig(),
+        autocomplete: bool = False
+    ) -> Response:
+        if autocomplete and (result_type == "tools" or isinstance(result_type, type)):
+            raise ValueError("autocompletion is not supported with 'tools' or pydantic model result_type")
+          
+        if max_tokens is None:
+            max_tokens = self.default_max_tokens
+        
+        response = self._create(
+            messages=messages,
+            result_type=result_type,
+            thinking_config=thinking_config,
+            system_message=system_message,
+            max_tokens=max_tokens,
+            tools=tools,
+            tool_config=tool_config,
+        )
+
+        total_count = BaseLLMClient._response_out_tokens(response)
+
+        while autocomplete and response.candidates and response.candidates[0].finish_reason == FinishReason.MAX_TOKENS:
+            BaseLLMClient._append_generated_part(messages, response)
+
+            response = self._create(
+                messages=messages,
+                result_type=result_type,
+                thinking_config=thinking_config,
+                system_message=system_message,
+                max_tokens=max_tokens,
+                tools=tools,
+                tool_config=tool_config,
+            )
+            total_count += BaseLLMClient._response_out_tokens(response)
+            if max_tokens is not None and total_count >= max_tokens:
+                break
+        return response
+
+    @abstractmethod
+    def _create(
         self,
         messages: list[Content],
         result_type: ResultType = None,
@@ -90,7 +137,7 @@ class BaseLLMClient(ABC, utils.InheritDecoratorsMixin):
         tool_config: ToolConfig = ToolConfig(),
     ) -> Response:
         pass
-    
+
     @overload
     def create_value(
         self,
@@ -102,6 +149,7 @@ class BaseLLMClient(ABC, utils.InheritDecoratorsMixin):
         max_tokens: int | None = None,
         tools: None = None,
         tool_choice_mode: Literal["NONE"] = "NONE",
+        autocomplete: bool = False,
     ) -> str: ...
     @overload
     def create_value(
@@ -114,6 +162,7 @@ class BaseLLMClient(ABC, utils.InheritDecoratorsMixin):
         max_tokens: int | None = None,
         tools: None = None,
         tool_choice_mode: Literal["NONE"] = "NONE",
+        autocomplete: bool = False,
     ) -> Json: ...
     @overload
     def create_value(
@@ -126,6 +175,7 @@ class BaseLLMClient(ABC, utils.InheritDecoratorsMixin):
         max_tokens: int | None = None,
         tools: None = None,
         tool_choice_mode: Literal["NONE"] = "NONE",
+        autocomplete: bool = False,
     ) -> PydanticStructure: ...
     @overload
     def create_value(
@@ -138,6 +188,7 @@ class BaseLLMClient(ABC, utils.InheritDecoratorsMixin):
         max_tokens: int | None = None,
         tools: list[Tool],
         tool_choice_mode: Literal["ANY"],
+        autocomplete: bool = False,
     ) -> list[FunctionCall]: ...
 
     def create_value(
@@ -177,20 +228,8 @@ class BaseLLMClient(ABC, utils.InheritDecoratorsMixin):
             max_tokens=max_tokens,
             tools=tools,
             tool_config=ToolConfig(function_calling_config=FunctionCallingConfig(mode=tool_choice_mode)),
+            autocomplete=autocomplete,
         )
-
-        while autocomplete and response.candidates and response.candidates[0].finish_reason not in [FinishReason.STOP, FinishReason.MAX_TOKENS]:
-            BaseLLMClient._append_generated_part(messages, response)
-
-            response = self.create(
-                messages=messages,
-                result_type=result_type,
-                thinking_config=thinking_config,
-                system_message=system_message,
-                max_tokens=max_tokens,
-                tools=tools,
-                tool_config=ToolConfig(function_calling_config=FunctionCallingConfig(mode=tool_choice_mode)),
-            )
 
         if result_type is None:
             return response.text
@@ -206,14 +245,14 @@ class BaseLLMClient(ABC, utils.InheritDecoratorsMixin):
 
         text_parts = [
             part for part in response.candidates[0].content.parts if part.text is not None and not part.thought
-        ] if response.candidates[0].content and response.candidates[0].content.parts else None
+        ] if response.candidates[0].content.parts else None
         if text_parts is not None and len(text_parts) > 0:
             response_text = "".join(part.text for part in text_parts)
             is_thought = False
         else:
             thought_parts = [
                 part for part in response.candidates[0].content.parts if part.text and part.thought
-            ] if response.candidates[0].content and response.candidates[0].content.parts else None
+            ] if response.candidates[0].content.parts else None
             if thought_parts is not None and len(thought_parts) > 0:
                 response_text = "".join(part.text for part in thought_parts)
                 is_thought = True
@@ -230,6 +269,10 @@ class BaseLLMClient(ABC, utils.InheritDecoratorsMixin):
                 message_to_append.parts.append(Part(text=response_text, thought=is_thought))
         else:
             messages.append(Content(parts=[Part(text=response_text, thought=is_thought)], role="model"))
+
+    @staticmethod
+    def _response_out_tokens(response: Response):
+        return 0 if not response.usage_metadata else (response.usage_metadata.candidates_token_count or 0) + (response.usage_metadata.thoughts_token_count or 0)
 
     @logfire_decorators.create_stream
     @utils.retry_cls
@@ -255,6 +298,7 @@ class BaseLLMClient(ABC, utils.InheritDecoratorsMixin):
         max_tokens: int | None = None,
         tools: None = None,
         tool_choice_mode: Literal["NONE"] = "NONE",
+        autocomplete: bool = False,
     ) -> str: ...
     @overload
     def from_text(
@@ -267,6 +311,7 @@ class BaseLLMClient(ABC, utils.InheritDecoratorsMixin):
         max_tokens: int | None = None,
         tools: None = None,
         tool_choice_mode: Literal["NONE"] = "NONE",
+        autocomplete: bool = False,
     ) -> Json: ...
     @overload
     def from_text(
@@ -279,6 +324,7 @@ class BaseLLMClient(ABC, utils.InheritDecoratorsMixin):
         max_tokens: int | None = None,
         tools: None = None,
         tool_choice_mode: Literal["NONE"] = "NONE",
+        autocomplete: bool = False,
     ) -> PydanticStructure: ...
     @overload
     def from_text(
@@ -291,6 +337,7 @@ class BaseLLMClient(ABC, utils.InheritDecoratorsMixin):
         max_tokens: int | None = None,
         tools: list[Tool],
         tool_choice_mode: Literal["ANY"],
+        autocomplete: bool = False,
     ) -> list[FunctionCall]: ...
     
     def from_text(
@@ -303,6 +350,7 @@ class BaseLLMClient(ABC, utils.InheritDecoratorsMixin):
         max_tokens: int | None = None,
         tools: list[Tool] | None = None,
         tool_choice_mode: Literal["ANY", "NONE"] = "NONE",
+        autocomplete: bool = False,
     ):
         return self.create_value(
             messages=[Content(parts=[Part(text=prompt)], role="user")],
@@ -312,6 +360,7 @@ class BaseLLMClient(ABC, utils.InheritDecoratorsMixin):
             max_tokens=max_tokens,
             tools=tools,
             tool_choice_mode=tool_choice_mode,
+            autocomplete=autocomplete,
         )
 
 
@@ -360,8 +409,55 @@ class BaseLLMClientAsync(ABC, utils.InheritDecoratorsMixin):
     @logfire_decorators.create_async
     @utils.retry_cls_async
     @utils.rpm_limit_cls_async
-    @abstractmethod
     async def create(
+        self,
+        messages: list[Content],
+        result_type: ResultType = None,
+        *,
+        thinking_config: ThinkingConfig | None = None,
+        system_message: str | None = None,
+        max_tokens: int | None = None,
+        tools: list[Tool] | None = None,
+        tool_config: ToolConfig = ToolConfig(),
+        autocomplete: bool = False,
+    ) -> Response:
+        if autocomplete and (result_type == "tools" or isinstance(result_type, type)):
+            raise ValueError("autocompletion is not supported with 'tools' or pydantic model result_type")
+          
+        if max_tokens is None:
+            max_tokens = self.default_max_tokens
+        
+        response = await self._create(
+            messages=messages,
+            result_type=result_type,
+            thinking_config=thinking_config,
+            system_message=system_message,
+            max_tokens=max_tokens,
+            tools=tools,
+            tool_config=tool_config,
+        )
+
+        total_count = BaseLLMClient._response_out_tokens(response)
+
+        while autocomplete and response.candidates and response.candidates[0].finish_reason == FinishReason.MAX_TOKENS:
+            BaseLLMClient._append_generated_part(messages, response)
+
+            response = await self._create(
+                messages=messages,
+                result_type=result_type,
+                thinking_config=thinking_config,
+                system_message=system_message,
+                max_tokens=max_tokens,
+                tools=tools,
+                tool_config=tool_config,
+            )
+            total_count += BaseLLMClient._response_out_tokens(response)
+            if max_tokens is not None and total_count >= max_tokens:
+                break
+        return response
+
+    @abstractmethod
+    async def _create(
         self,
         messages: list[Content],
         result_type: ResultType = None,
@@ -373,7 +469,7 @@ class BaseLLMClientAsync(ABC, utils.InheritDecoratorsMixin):
         tool_config: ToolConfig = ToolConfig(),
     ) -> Response:
         pass
-    
+
     @overload
     async def create_value(
         self,
@@ -385,6 +481,7 @@ class BaseLLMClientAsync(ABC, utils.InheritDecoratorsMixin):
         max_tokens: int | None = None,
         tools: None = None,
         tool_choice_mode: Literal["NONE"] = "NONE",
+        autocomplete: bool = False,
     ) -> str: ...
     @overload
     async def create_value(
@@ -397,6 +494,7 @@ class BaseLLMClientAsync(ABC, utils.InheritDecoratorsMixin):
         max_tokens: int | None = None,
         tools: None = None,
         tool_choice_mode: Literal["NONE"] = "NONE",
+        autocomplete: bool = False,
     ) -> Json: ...
     @overload
     async def create_value(
@@ -409,6 +507,7 @@ class BaseLLMClientAsync(ABC, utils.InheritDecoratorsMixin):
         max_tokens: int | None = None,
         tools: None = None,
         tool_choice_mode: Literal["NONE"] = "NONE",
+        autocomplete: bool = False,
     ) -> PydanticStructure: ...
     @overload
     async def create_value(
@@ -421,6 +520,7 @@ class BaseLLMClientAsync(ABC, utils.InheritDecoratorsMixin):
         max_tokens: int | None = None,
         tools: list[Tool],
         tool_choice_mode: Literal["ANY"],
+        autocomplete: bool = False,
     ) -> list[FunctionCall]: ...
 
     async def create_value(
@@ -436,7 +536,7 @@ class BaseLLMClientAsync(ABC, utils.InheritDecoratorsMixin):
         autocomplete: bool = False,
     ):
         if result_type == "tools":
-            response = await self.create(
+            response = await self._create(
                 messages=messages,
                 result_type=None,
                 thinking_config=thinking_config,
@@ -451,7 +551,7 @@ class BaseLLMClientAsync(ABC, utils.InheritDecoratorsMixin):
                     if part.function_call is not None:
                         functions.append(part.function_call)
             return functions
-
+        
         response = await self.create(
             messages=messages,
             result_type=result_type,
@@ -460,24 +560,8 @@ class BaseLLMClientAsync(ABC, utils.InheritDecoratorsMixin):
             max_tokens=max_tokens,
             tools=tools,
             tool_config=ToolConfig(function_calling_config=FunctionCallingConfig(mode=tool_choice_mode)),
+            autocomplete=autocomplete
         )
-
-        if max_tokens is None:
-            max_tokens = self.default_max_tokens
-
-        while autocomplete and response.candidates and response.candidates[0].finish_reason not in [FinishReason.STOP, FinishReason.MAX_TOKENS]:
-            BaseLLMClient._append_generated_part(messages, response)
-
-            response = await self.create(
-                messages=messages,
-                result_type=result_type,
-                thinking_config=thinking_config,
-                system_message=system_message,
-                max_tokens=max_tokens,
-                tools=tools,
-                tool_config=ToolConfig(function_calling_config=FunctionCallingConfig(mode=tool_choice_mode)),
-            )
-
         if result_type is None:
             return response.text
         else:
@@ -509,6 +593,7 @@ class BaseLLMClientAsync(ABC, utils.InheritDecoratorsMixin):
         max_tokens: int | None = None,
         tools: None = None,
         tool_choice_mode: Literal["NONE"] = "NONE",
+        autocomplete: bool = False,
     ) -> str: ...
     @overload
     async def from_text(
@@ -521,6 +606,7 @@ class BaseLLMClientAsync(ABC, utils.InheritDecoratorsMixin):
         max_tokens: int | None = None,
         tools: None = None,
         tool_choice_mode: Literal["NONE"] = "NONE",
+        autocomplete: bool = False,
     ) -> Json: ...
     @overload
     async def from_text(
@@ -533,6 +619,7 @@ class BaseLLMClientAsync(ABC, utils.InheritDecoratorsMixin):
         max_tokens: int | None = None,
         tools: None = None,
         tool_choice_mode: Literal["NONE"] = "NONE",
+        autocomplete: bool = False,
     ) -> PydanticStructure: ...
     @overload
     async def from_text(
@@ -545,6 +632,7 @@ class BaseLLMClientAsync(ABC, utils.InheritDecoratorsMixin):
         max_tokens: int | None = None,
         tools: list[Tool],
         tool_choice_mode: Literal["ANY"],
+        autocomplete: bool = False,
     ) -> list[FunctionCall]: ...
     
     async def from_text(
@@ -557,6 +645,7 @@ class BaseLLMClientAsync(ABC, utils.InheritDecoratorsMixin):
         max_tokens: int | None = None,
         tools: list[Tool] | None = None,
         tool_choice_mode: Literal["ANY", "NONE"] = "NONE",
+        autocomplete: bool = False,
     ):
         return await self.create_value(
             messages=[Content(parts=[Part(text=prompt)], role="user")],
@@ -566,6 +655,7 @@ class BaseLLMClientAsync(ABC, utils.InheritDecoratorsMixin):
             max_tokens=max_tokens,
             tools=tools,
             tool_choice_mode=tool_choice_mode,
+            autocomplete=autocomplete,
         )
 
 
@@ -586,7 +676,7 @@ class CachedLLMClient(BaseLLMClient):
         self.llm_client = llm_client
         self.cache_dir = cache_dir
     
-    def create(self, messages: list[Content], **kwargs) -> Response:
+    def _create(self, messages: list[Content], **kwargs) -> Response:
         response, messages_dump, cache_path = CachedLLMClient.create_cached(self.llm_client, self.cache_dir, messages, **kwargs)
         if response is not None:
             return response
@@ -635,8 +725,8 @@ class CachedLLMClientAsync(BaseLLMClientAsync):
         self.provider = llm_client.provider
         self.llm_client = llm_client
         self.cache_dir = cache_dir
-    
-    async def create(self, messages: list[Content], **kwargs) -> Response:
+
+    async def _create(self, messages: list[Content], **kwargs) -> Response:
         response, messages_dump, cache_path = CachedLLMClient.create_cached(self.llm_client, self.cache_dir, messages, **kwargs)
         if response is not None:
             return response        

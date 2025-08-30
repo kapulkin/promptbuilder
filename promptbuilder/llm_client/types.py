@@ -143,6 +143,7 @@ class UsageMetadata(BaseModel):
     cached_content_token_count: Optional[int] = None
     candidates_token_count: Optional[int] = None
     prompt_token_count: Optional[int] = None
+    thoughts_token_count: Optional[int] = None
     total_token_count: Optional[int] = None
 
 class ThinkingConfig(BaseModel):

@@ -87,7 +87,7 @@ class GoogleLLMClient(BaseLLMClient):
         return new_messages
     
     @_error_handler
-    def create(
+    def _create(
         self,
         messages: list[Content],
         result_type: ResultType = None,
@@ -240,7 +240,7 @@ class GoogleLLMClientAsync(BaseLLMClientAsync):
         return self._api_key
 
     @_error_handler_async
-    async def create(
+    async def _create(
         self,
         messages: list[Content],
         result_type: ResultType = None,
