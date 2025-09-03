@@ -9,3 +9,4 @@ aioboto3
 botocore
 httpx
 aiohttp
+litellm

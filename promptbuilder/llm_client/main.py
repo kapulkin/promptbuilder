@@ -10,6 +10,7 @@ from promptbuilder.llm_client.anthropic_client import AnthropicLLMClient, Anthro
 from promptbuilder.llm_client.openai_client import OpenaiLLMClient, OpenaiLLMClientAsync
 from promptbuilder.llm_client.bedrock_client import BedrockLLMClient, BedrockLLMClientAsync
 from promptbuilder.llm_client.aisuite_client import AiSuiteLLMClient, AiSuiteLLMClientAsync
+from promptbuilder.llm_client.litellm_client import LiteLLMLLMClient, LiteLLMLLMClientAsync
 
 
 
@@ -42,10 +43,7 @@ def get_client(
         client_class = provider_to_client_class[provider]
         client = client_class(model, api_key, **kwargs)
     else:
-        if api_key is None:
-            raise ValueError(f"You should directly provide api_key for this provider: {provider}")
-        else:
-            client = AiSuiteLLMClient(full_model_name, api_key, **kwargs)
+        client = LiteLLMLLMClient(full_model_name, api_key, **kwargs)
     
     if (full_model_name, client.api_key) in _memory:
         client = _memory[(full_model_name, client.api_key)]
@@ -86,10 +84,7 @@ def get_async_client(
         client_class = provider_to_client_class[provider]
         client = client_class(model, api_key, **kwargs)
     else:
-        if api_key is None:
-            raise ValueError(f"You should directly provide api_key for this provider: {provider}")
-        else:
-            client = AiSuiteLLMClientAsync(full_model_name, api_key, **kwargs)
+        client = LiteLLMLLMClientAsync(full_model_name, api_key, **kwargs)
         
     if (full_model_name, client.api_key) in _memory_async:
         client = _memory_async[(full_model_name, client.api_key)]
