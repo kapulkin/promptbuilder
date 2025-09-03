@@ -121,6 +121,9 @@ class BaseLLMClient(ABC, utils.InheritDecoratorsMixin):
             total_count += BaseLLMClient._response_out_tokens(response)
             if max_tokens is not None and total_count >= max_tokens:
                 break
+        if response.candidates:
+            BaseLLMClient._append_generated_part(messages, response)
+            response.candidates[0].content = messages[-1] if len(messages) > 0 else None
         return response
 
     @logfire_decorators.create
@@ -455,6 +458,9 @@ class BaseLLMClientAsync(ABC, utils.InheritDecoratorsMixin):
             total_count += BaseLLMClient._response_out_tokens(response)
             if max_tokens is not None and total_count >= max_tokens:
                 break
+        if response.candidates:
+            BaseLLMClient._append_generated_part(messages, response)
+            response.candidates[0].content = messages[-1] if len(messages) > 0 else None
         return response
 
     @logfire_decorators.create_async
