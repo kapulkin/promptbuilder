@@ -104,7 +104,8 @@ class BaseLLMClient(ABC, utils.InheritDecoratorsMixin):
 
         total_count = BaseLLMClient._response_out_tokens(response)
 
-        while autocomplete and response.candidates and response.candidates[0].finish_reason == FinishReason.MAX_TOKENS:
+        finish_reason = response.candidates[0].finish_reason.value if response.candidates and response.candidates[0].finish_reason else None
+        while autocomplete and response.candidates and finish_reason == FinishReason.MAX_TOKENS.value:
             BaseLLMClient._append_generated_part(messages, response)
 
             response = self._create(
@@ -436,7 +437,8 @@ class BaseLLMClientAsync(ABC, utils.InheritDecoratorsMixin):
 
         total_count = BaseLLMClient._response_out_tokens(response)
 
-        while autocomplete and response.candidates and response.candidates[0].finish_reason == FinishReason.MAX_TOKENS:
+        finish_reason = response.candidates[0].finish_reason.value if response.candidates and response.candidates[0].finish_reason else None
+        while autocomplete and response.candidates and finish_reason == FinishReason.MAX_TOKENS.value:
             BaseLLMClient._append_generated_part(messages, response)
 
             response = await self._create(
