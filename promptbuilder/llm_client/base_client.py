@@ -117,6 +117,7 @@ class BaseLLMClient(ABC, utils.InheritDecoratorsMixin):
                 tools=tools,
                 tool_config=tool_config,
             )
+            finish_reason = response.candidates[0].finish_reason.value if response.candidates and response.candidates[0].finish_reason else None
             total_count += BaseLLMClient._response_out_tokens(response)
             if max_tokens is not None and total_count >= max_tokens:
                 break
@@ -450,6 +451,7 @@ class BaseLLMClientAsync(ABC, utils.InheritDecoratorsMixin):
                 tools=tools,
                 tool_config=tool_config,
             )
+            finish_reason = response.candidates[0].finish_reason.value if response.candidates and response.candidates[0].finish_reason else None
             total_count += BaseLLMClient._response_out_tokens(response)
             if max_tokens is not None and total_count >= max_tokens:
                 break
