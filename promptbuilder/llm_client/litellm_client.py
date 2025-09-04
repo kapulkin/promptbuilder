@@ -12,6 +12,7 @@ from promptbuilder.llm_client.types import (
     Candidate,
     UsageMetadata,
     Part,
+    FinishReason,
     ThinkingConfig,
     Tool,
     ToolConfig,
@@ -105,6 +106,30 @@ class LiteLLMLLMClient(BaseLLMClient):
             cached_content_token_count=cached_tokens,
             thoughts_token_count=thoughts_tokens,
         )
+
+    @staticmethod
+    def _map_finish_reason(reason: Any) -> FinishReason | None:
+        if reason is None:
+            return None
+        # Normalize to string
+        if not isinstance(reason, str):
+            try:
+                reason = str(reason)
+            except Exception:
+                return None
+        reason = reason.lower()
+        # Map common OpenAI/LiteLLM reasons to our enum
+        if reason == "stop":
+            return FinishReason.STOP
+        if reason in ("length", "max_tokens"):
+            return FinishReason.MAX_TOKENS
+        if reason in ("content_filter", "safety"):
+            return FinishReason.SAFETY
+        if reason in ("tool_calls", "function_call"):
+            # Model is asking to call tools/functions; not an error and not max tokens
+            return FinishReason.OTHER
+        # Unknown reason
+        return FinishReason.FINISH_REASON_UNSPECIFIED
 
     def _create(
         self,
@@ -205,13 +230,24 @@ class LiteLLMLLMClient(BaseLLMClient):
                 msg0 = first_choice.get("message")
                 if isinstance(msg0, dict):
                     role_str = msg0.get("role")
+            # finish_reason from first choice
+            finish_reason_val = None
+            if first_choice is not None:
+                if isinstance(first_choice, dict):
+                    finish_reason_val = first_choice.get("finish_reason")
+                else:
+                    finish_reason_val = getattr(first_choice, "finish_reason", None)
+            mapped_finish_reason = LiteLLMLLMClient._map_finish_reason(finish_reason_val)
 
             content_parts: list[Part | Any] = list(parts)
             return Response(
-                candidates=[Candidate(content=Content(
-                    parts=content_parts,  # type: ignore[arg-type]
-                    role=self._external_role(role_str) if role_str else None,
-                ))],
+                candidates=[Candidate(
+                    content=Content(
+                        parts=content_parts,  # type: ignore[arg-type]
+                        role=self._external_role(role_str) if role_str else None,
+                    ),
+                    finish_reason=mapped_finish_reason,
+                )],
                 usage_metadata=usage_md,
             )
         elif isinstance(result_type, type(BaseModel)):
@@ -247,13 +283,23 @@ class LiteLLMLLMClient(BaseLLMClient):
                 msg0 = first_choice.get("message")
                 if isinstance(msg0, dict):
                     role_str = msg0.get("role")
+            finish_reason_val = None
+            if first_choice is not None:
+                if isinstance(first_choice, dict):
+                    finish_reason_val = first_choice.get("finish_reason")
+                else:
+                    finish_reason_val = getattr(first_choice, "finish_reason", None)
+            mapped_finish_reason = LiteLLMLLMClient._map_finish_reason(finish_reason_val)
 
             content_parts2: list[Part | Any] = list(parts)
             return Response(
-                candidates=[Candidate(content=Content(
-                    parts=content_parts2,  # type: ignore[arg-type]
-                    role=self._external_role(role_str) if role_str else None,
-                ))],
+                candidates=[Candidate(
+                    content=Content(
+                        parts=content_parts2,  # type: ignore[arg-type]
+                        role=self._external_role(role_str) if role_str else None,
+                    ),
+                    finish_reason=mapped_finish_reason,
+                )],
                 usage_metadata=usage_md,
                 parsed=parsed_pydantic,
             )
@@ -391,13 +437,23 @@ class LiteLLMLLMClientAsync(BaseLLMClientAsync):
                 msg0 = first_choice.get("message")
                 if isinstance(msg0, dict):
                     role_str = msg0.get("role")
+            finish_reason_val = None
+            if first_choice is not None:
+                if isinstance(first_choice, dict):
+                    finish_reason_val = first_choice.get("finish_reason")
+                else:
+                    finish_reason_val = getattr(first_choice, "finish_reason", None)
+            mapped_finish_reason = LiteLLMLLMClient._map_finish_reason(finish_reason_val)
 
             content_parts3: list[Part | Any] = list(parts)
             return Response(
-                candidates=[Candidate(content=Content(
-                    parts=content_parts3,  # type: ignore[arg-type]
-                    role=self._external_role(role_str) if role_str else None,
-                ))],
+                candidates=[Candidate(
+                    content=Content(
+                        parts=content_parts3,  # type: ignore[arg-type]
+                        role=self._external_role(role_str) if role_str else None,
+                    ),
+                    finish_reason=mapped_finish_reason,
+                )],
                 usage_metadata=usage_md,
             )
         elif isinstance(result_type, type(BaseModel)):
@@ -433,13 +489,23 @@ class LiteLLMLLMClientAsync(BaseLLMClientAsync):
                 msg0 = first_choice.get("message")
                 if isinstance(msg0, dict):
                     role_str = msg0.get("role")
+            finish_reason_val = None
+            if first_choice is not None:
+                if isinstance(first_choice, dict):
+                    finish_reason_val = first_choice.get("finish_reason")
+                else:
+                    finish_reason_val = getattr(first_choice, "finish_reason", None)
+            mapped_finish_reason = LiteLLMLLMClient._map_finish_reason(finish_reason_val)
 
             content_parts4: list[Part | Any] = list(parts)
             return Response(
-                candidates=[Candidate(content=Content(
-                    parts=content_parts4,  # type: ignore[arg-type]
-                    role=self._external_role(role_str) if role_str else None,
-                ))],
+                candidates=[Candidate(
+                    content=Content(
+                        parts=content_parts4,  # type: ignore[arg-type]
+                        role=self._external_role(role_str) if role_str else None,
+                    ),
+                    finish_reason=mapped_finish_reason,
+                )],
                 usage_metadata=usage_md,
                 parsed=parsed_pydantic,
             )

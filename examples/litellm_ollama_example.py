@@ -28,7 +28,7 @@ os.environ.setdefault("OLLAMA_BASE_URL", "http://localhost:11434")
 full_model_name = os.environ.get("LITELLM_OLLAMA_MODEL", "ollama:gemma3:4b")
 
 # Create a synchronous client via factory; this will use LiteLLM client for 'ollama:*'
-client = get_async_client(full_model_name=full_model_name, api_key=None)
+client = get_async_client(full_model_name=full_model_name)
 
 resp = asyncio.run(
     client.create(
