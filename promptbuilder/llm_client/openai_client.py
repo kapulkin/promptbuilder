@@ -150,6 +150,7 @@ class OpenaiLLMClient(BaseLLMClient):
         thinking_config: ThinkingConfig | None = None,
         system_message: str | None = None,
         max_tokens: int | None = None,
+        timeout: float | None = None,
         tools: list[Tool] | None = None,
         tool_config: ToolConfig = ToolConfig(),
     ) -> Response:
@@ -205,6 +206,9 @@ class OpenaiLLMClient(BaseLLMClient):
                 openai_kwargs["tool_choice"] = "required"
         
         if result_type is None or result_type == "json":
+            # Forward timeout to OpenAI per-request if provided
+            if timeout is not None:
+                openai_kwargs["timeout"] = timeout
             response = self.client.responses.create(**openai_kwargs)
             
             parts: list[Part] = []
@@ -227,6 +231,8 @@ class OpenaiLLMClient(BaseLLMClient):
                 ),
             )
         elif isinstance(result_type, type(BaseModel)):
+            if timeout is not None:
+                openai_kwargs["timeout"] = timeout
             response = self.client.responses.parse(**openai_kwargs, text_format=result_type)
             
             parts: list[Part] = []
@@ -385,6 +391,7 @@ class OpenaiLLMClientAsync(BaseLLMClientAsync):
         thinking_config: ThinkingConfig | None = None,
         system_message: str | None = None,
         max_tokens: int | None = None,
+        timeout: float | None = None,
         tools: list[Tool] | None = None,
         tool_config: ToolConfig = ToolConfig(),
     ) -> Response:
@@ -447,8 +454,9 @@ class OpenaiLLMClientAsync(BaseLLMClientAsync):
                 openai_kwargs["tool_choice"] = "required"
         
         if result_type is None or result_type == "json":
+            if timeout is not None:
+                openai_kwargs["timeout"] = timeout
             response = await self.client.responses.create(**openai_kwargs)
-            
             parts: list[Part] = []
             for output_item in response.output:
                 if output_item.type == "message":
@@ -469,6 +477,8 @@ class OpenaiLLMClientAsync(BaseLLMClientAsync):
                 ),
             )
         elif isinstance(result_type, type(BaseModel)):
+            if timeout is not None:
+                openai_kwargs["timeout"] = timeout
             response = await self.client.responses.parse(**openai_kwargs, text_format=result_type)
             
             parts: list[Part] = []

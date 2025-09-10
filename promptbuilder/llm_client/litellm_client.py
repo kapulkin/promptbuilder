@@ -139,6 +139,7 @@ class LiteLLMLLMClient(BaseLLMClient):
         thinking_config: ThinkingConfig | None = None,
         system_message: str | None = None,
         max_tokens: int | None = None,
+        timeout: float | None = None,
         tools: list[Tool] | None = None,
         tool_config: ToolConfig = ToolConfig(),
     ) -> Response:
@@ -167,6 +168,9 @@ class LiteLLMLLMClient(BaseLLMClient):
 
         if max_tokens is not None:
             kwargs["max_tokens"] = max_tokens
+        if timeout is not None:
+            # LiteLLM supports request_timeout in seconds
+            kwargs["request_timeout"] = timeout
 
         if tools is not None:
             lite_tools = []
@@ -351,6 +355,7 @@ class LiteLLMLLMClientAsync(BaseLLMClientAsync):
         thinking_config: ThinkingConfig | None = None,
         system_message: str | None = None,
         max_tokens: int | None = None,
+        timeout: float | None = None,
         tools: list[Tool] | None = None,
         tool_config: ToolConfig = ToolConfig(),
     ) -> Response:
@@ -377,6 +382,8 @@ class LiteLLMLLMClientAsync(BaseLLMClientAsync):
 
         if max_tokens is not None:
             kwargs["max_tokens"] = max_tokens
+        if timeout is not None:
+            kwargs["request_timeout"] = timeout
 
         if tools is not None:
             lite_tools = []

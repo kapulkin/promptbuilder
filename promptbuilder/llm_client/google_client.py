@@ -95,6 +95,7 @@ class GoogleLLMClient(BaseLLMClient):
         thinking_config: ThinkingConfig | None = None,
         system_message: str | None = None,
         max_tokens: int | None = None,
+        timeout: float | None = None,
         tools: list[Tool] | None = None,
         tool_config: ToolConfig = ToolConfig(),
     ) -> Response:
@@ -107,6 +108,9 @@ class GoogleLLMClient(BaseLLMClient):
             tools=tools,
             tool_config=tool_config,
         )
+        if timeout is not None:
+            # Google processes timeout via HttpOptions on the request/config
+            config.http_options = types.HttpOptions(timeout=int(timeout * 1_000))
         
         if thinking_config is None:
             thinking_config = self.default_thinking_config
@@ -248,6 +252,7 @@ class GoogleLLMClientAsync(BaseLLMClientAsync):
         thinking_config: ThinkingConfig | None = None,
         system_message: str | None = None,
         max_tokens: int | None = None,
+        timeout: float | None = None,
         tools: list[Tool] | None = None,
         tool_config: ToolConfig = ToolConfig(),
     ) -> Response:
@@ -260,11 +265,13 @@ class GoogleLLMClientAsync(BaseLLMClientAsync):
             tools=tools,
             tool_config=tool_config,
         )
-        
+        if timeout is not None:
+            config.http_options = types.HttpOptions(timeout=int(timeout * 1_000))
+
         if thinking_config is None:
             thinking_config = self.default_thinking_config
         config.thinking_config = thinking_config
-        
+
         if result_type is None or result_type == "json":
             return await self.client.aio.models.generate_content(
                 model=self.model,

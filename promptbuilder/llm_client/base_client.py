@@ -82,6 +82,7 @@ class BaseLLMClient(ABC, utils.InheritDecoratorsMixin):
         thinking_config: ThinkingConfig | None = None,
         system_message: str | None = None,
         max_tokens: int | None = None,
+        timeout: float | None = None,
         tools: list[Tool] | None = None,
         tool_config: ToolConfig = ToolConfig(),
         autocomplete: bool = False
@@ -98,6 +99,7 @@ class BaseLLMClient(ABC, utils.InheritDecoratorsMixin):
             thinking_config=thinking_config,
             system_message=system_message,
             max_tokens=max_tokens,
+            timeout=timeout,
             tools=tools,
             tool_config=tool_config,
         )
@@ -105,26 +107,28 @@ class BaseLLMClient(ABC, utils.InheritDecoratorsMixin):
         total_count = BaseLLMClient._response_out_tokens(response)
 
         finish_reason = response.candidates[0].finish_reason.value if response.candidates and response.candidates[0].finish_reason else None
-        while autocomplete and response.candidates and finish_reason == FinishReason.MAX_TOKENS.value:
-            BaseLLMClient._append_generated_part(messages, response)
+        if autocomplete:
+            while autocomplete and response.candidates and finish_reason == FinishReason.MAX_TOKENS.value:
+                BaseLLMClient._append_generated_part(messages, response)
 
-            response = self._create(
-                messages=messages,
-                result_type=result_type,
-                thinking_config=thinking_config,
-                system_message=system_message,
-                max_tokens=max_tokens,
-                tools=tools,
-                tool_config=tool_config,
-            )
-            finish_reason = response.candidates[0].finish_reason.value if response.candidates and response.candidates[0].finish_reason else None
-            total_count += BaseLLMClient._response_out_tokens(response)
-            if max_tokens is not None and total_count >= max_tokens:
-                break
-        if response.candidates and response.candidates[0].content:
-            appended_message = BaseLLMClient._append_generated_part(messages, response)
-            if appended_message is not None:
-                response.candidates[0].content = appended_message
+                response = self._create(
+                    messages=messages,
+                    result_type=result_type,
+                    thinking_config=thinking_config,
+                    system_message=system_message,
+                    max_tokens=max_tokens,
+                    timeout=timeout,
+                    tools=tools,
+                    tool_config=tool_config,
+                )
+                finish_reason = response.candidates[0].finish_reason.value if response.candidates and response.candidates[0].finish_reason else None
+                total_count += BaseLLMClient._response_out_tokens(response)
+                if max_tokens is not None and total_count >= max_tokens:
+                    break
+            if response.candidates and response.candidates[0].content:
+                appended_message = BaseLLMClient._append_generated_part(messages, response)
+                if appended_message is not None:
+                    response.candidates[0].content = appended_message
         return response
 
     @logfire_decorators.create
@@ -139,6 +143,7 @@ class BaseLLMClient(ABC, utils.InheritDecoratorsMixin):
         thinking_config: ThinkingConfig | None = None,
         system_message: str | None = None,
         max_tokens: int | None = None,
+        timeout: float | None = None,
         tools: list[Tool] | None = None,
         tool_config: ToolConfig = ToolConfig(),
     ) -> Response:
@@ -153,6 +158,7 @@ class BaseLLMClient(ABC, utils.InheritDecoratorsMixin):
         thinking_config: ThinkingConfig | None = None,
         system_message: str | None = None,
         max_tokens: int | None = None,
+        timeout: float | None = None,
         tools: None = None,
         tool_choice_mode: Literal["NONE"] = "NONE",
         autocomplete: bool = False,
@@ -166,6 +172,7 @@ class BaseLLMClient(ABC, utils.InheritDecoratorsMixin):
         thinking_config: ThinkingConfig | None = None,
         system_message: str | None = None,
         max_tokens: int | None = None,
+        timeout: float | None = None,
         tools: None = None,
         tool_choice_mode: Literal["NONE"] = "NONE",
         autocomplete: bool = False,
@@ -179,6 +186,7 @@ class BaseLLMClient(ABC, utils.InheritDecoratorsMixin):
         thinking_config: ThinkingConfig | None = None,
         system_message: str | None = None,
         max_tokens: int | None = None,
+        timeout: float | None = None,
         tools: None = None,
         tool_choice_mode: Literal["NONE"] = "NONE",
         autocomplete: bool = False,
@@ -192,6 +200,7 @@ class BaseLLMClient(ABC, utils.InheritDecoratorsMixin):
         thinking_config: ThinkingConfig | None = None,
         system_message: str | None = None,
         max_tokens: int | None = None,
+        timeout: float | None = None,
         tools: list[Tool],
         tool_choice_mode: Literal["ANY"],
         autocomplete: bool = False,
@@ -205,6 +214,7 @@ class BaseLLMClient(ABC, utils.InheritDecoratorsMixin):
         thinking_config: ThinkingConfig | None = None,
         system_message: str | None = None,
         max_tokens: int | None = None,
+        timeout: float | None = None,
         tools: list[Tool] | None = None,
         tool_choice_mode: Literal["ANY", "NONE"] = "NONE",
         autocomplete: bool = False,
@@ -216,6 +226,7 @@ class BaseLLMClient(ABC, utils.InheritDecoratorsMixin):
                 thinking_config=thinking_config,
                 system_message=system_message,
                 max_tokens=max_tokens,
+                timeout=timeout,
                 tools=tools,
                 tool_config=ToolConfig(function_calling_config=FunctionCallingConfig(mode=tool_choice_mode)),
             )
@@ -232,6 +243,7 @@ class BaseLLMClient(ABC, utils.InheritDecoratorsMixin):
             thinking_config=thinking_config,
             system_message=system_message,
             max_tokens=max_tokens,
+            timeout=timeout,
             tools=tools,
             tool_config=ToolConfig(function_calling_config=FunctionCallingConfig(mode=tool_choice_mode)),
             autocomplete=autocomplete,
@@ -421,6 +433,7 @@ class BaseLLMClientAsync(ABC, utils.InheritDecoratorsMixin):
         thinking_config: ThinkingConfig | None = None,
         system_message: str | None = None,
         max_tokens: int | None = None,
+        timeout: float | None = None,
         tools: list[Tool] | None = None,
         tool_config: ToolConfig = ToolConfig(),
         autocomplete: bool = False,
@@ -437,6 +450,7 @@ class BaseLLMClientAsync(ABC, utils.InheritDecoratorsMixin):
             thinking_config=thinking_config,
             system_message=system_message,
             max_tokens=max_tokens,
+            timeout=timeout,
             tools=tools,
             tool_config=tool_config,
         )
@@ -444,26 +458,28 @@ class BaseLLMClientAsync(ABC, utils.InheritDecoratorsMixin):
         total_count = BaseLLMClient._response_out_tokens(response)
 
         finish_reason = response.candidates[0].finish_reason.value if response.candidates and response.candidates[0].finish_reason else None
-        while autocomplete and response.candidates and finish_reason == FinishReason.MAX_TOKENS.value:
-            BaseLLMClient._append_generated_part(messages, response)
+        if autocomplete:
+            while autocomplete and response.candidates and finish_reason == FinishReason.MAX_TOKENS.value:
+                BaseLLMClient._append_generated_part(messages, response)
 
-            response = await self._create(
-                messages=messages,
-                result_type=result_type,
-                thinking_config=thinking_config,
-                system_message=system_message,
-                max_tokens=max_tokens,
-                tools=tools,
-                tool_config=tool_config,
-            )
-            finish_reason = response.candidates[0].finish_reason.value if response.candidates and response.candidates[0].finish_reason else None
-            total_count += BaseLLMClient._response_out_tokens(response)
-            if max_tokens is not None and total_count >= max_tokens:
-                break
-        if response.candidates and response.candidates[0].content:
-            appended_message = BaseLLMClient._append_generated_part(messages, response)
-            if appended_message is not None:
-                response.candidates[0].content = appended_message
+                response = await self._create(
+                    messages=messages,
+                    result_type=result_type,
+                    thinking_config=thinking_config,
+                    system_message=system_message,
+                    max_tokens=max_tokens,
+                    timeout=timeout,
+                    tools=tools,
+                    tool_config=tool_config,
+                )
+                finish_reason = response.candidates[0].finish_reason.value if response.candidates and response.candidates[0].finish_reason else None
+                total_count += BaseLLMClient._response_out_tokens(response)
+                if max_tokens is not None and total_count >= max_tokens:
+                    break
+            if response.candidates and response.candidates[0].content:
+                appended_message = BaseLLMClient._append_generated_part(messages, response)
+                if appended_message is not None:
+                    response.candidates[0].content = appended_message
         return response
 
     @logfire_decorators.create_async
@@ -478,6 +494,7 @@ class BaseLLMClientAsync(ABC, utils.InheritDecoratorsMixin):
         thinking_config: ThinkingConfig | None = None,
         system_message: str | None = None,
         max_tokens: int | None = None,
+        timeout: float | None = None,
         tools: list[Tool] | None = None,
         tool_config: ToolConfig = ToolConfig(),
     ) -> Response:
@@ -492,6 +509,7 @@ class BaseLLMClientAsync(ABC, utils.InheritDecoratorsMixin):
         thinking_config: ThinkingConfig | None = None,
         system_message: str | None = None,
         max_tokens: int | None = None,
+        timeout: float | None = None,
         tools: None = None,
         tool_choice_mode: Literal["NONE"] = "NONE",
         autocomplete: bool = False,
@@ -505,6 +523,7 @@ class BaseLLMClientAsync(ABC, utils.InheritDecoratorsMixin):
         thinking_config: ThinkingConfig | None = None,
         system_message: str | None = None,
         max_tokens: int | None = None,
+        timeout: float | None = None,
         tools: None = None,
         tool_choice_mode: Literal["NONE"] = "NONE",
         autocomplete: bool = False,
@@ -518,6 +537,7 @@ class BaseLLMClientAsync(ABC, utils.InheritDecoratorsMixin):
         thinking_config: ThinkingConfig | None = None,
         system_message: str | None = None,
         max_tokens: int | None = None,
+        timeout: float | None = None,
         tools: None = None,
         tool_choice_mode: Literal["NONE"] = "NONE",
         autocomplete: bool = False,
@@ -531,6 +551,7 @@ class BaseLLMClientAsync(ABC, utils.InheritDecoratorsMixin):
         thinking_config: ThinkingConfig | None = None,
         system_message: str | None = None,
         max_tokens: int | None = None,
+        timeout: float | None = None,
         tools: list[Tool],
         tool_choice_mode: Literal["ANY"],
         autocomplete: bool = False,
@@ -544,6 +565,7 @@ class BaseLLMClientAsync(ABC, utils.InheritDecoratorsMixin):
         thinking_config: ThinkingConfig | None = None,
         system_message: str | None = None,
         max_tokens: int | None = None,
+        timeout: float | None = None,
         tools: list[Tool] | None = None,
         tool_choice_mode: Literal["ANY", "NONE"] = "NONE",
         autocomplete: bool = False,
@@ -555,6 +577,7 @@ class BaseLLMClientAsync(ABC, utils.InheritDecoratorsMixin):
                 thinking_config=thinking_config,
                 system_message=system_message,
                 max_tokens=max_tokens,
+                timeout=timeout,
                 tools=tools,
                 tool_config=ToolConfig(function_calling_config=FunctionCallingConfig(mode=tool_choice_mode)),
             )
@@ -571,6 +594,7 @@ class BaseLLMClientAsync(ABC, utils.InheritDecoratorsMixin):
             thinking_config=thinking_config,
             system_message=system_message,
             max_tokens=max_tokens,
+            timeout=timeout,
             tools=tools,
             tool_config=ToolConfig(function_calling_config=FunctionCallingConfig(mode=tool_choice_mode)),
             autocomplete=autocomplete

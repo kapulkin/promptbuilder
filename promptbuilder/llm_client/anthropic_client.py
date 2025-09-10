@@ -200,6 +200,7 @@ class AnthropicLLMClient(BaseLLMClient):
         thinking_config: ThinkingConfig | None = None,
         system_message: str | None = None,
         max_tokens: int | None = None,
+        timeout: float | None = None,
         tools: list[Tool] | None = None,
         tool_config: ToolConfig = ToolConfig(),
     ) -> Response:
@@ -215,6 +216,9 @@ class AnthropicLLMClient(BaseLLMClient):
             "max_tokens": max_tokens,
             "messages": anthropic_messages,
         }
+
+        if timeout is not None:
+            anthropic_kwargs["timeout"] = timeout
         
         if thinking_config is None:
             thinking_config = self.default_thinking_config
@@ -453,6 +457,7 @@ class AnthropicLLMClientAsync(BaseLLMClientAsync):
         thinking_config: ThinkingConfig | None = None,
         system_message: str | None = None,
         max_tokens: int | None = None,
+        timeout: float | None = None,
         tools: list[Tool] | None = None,
         tool_config: ToolConfig = ToolConfig(),
     ) -> Response:
@@ -474,6 +479,9 @@ class AnthropicLLMClientAsync(BaseLLMClientAsync):
             "max_tokens": max_tokens,
             "messages": anthropic_messages,
         }
+
+        if timeout is not None:
+            anthropic_kwargs["timeout"] = timeout
         
         if thinking_config is None:
             thinking_config = self.default_thinking_config
