@@ -23,7 +23,7 @@ from promptbuilder.llm_client.config import DecoratorConfigs
 from promptbuilder.prompt_builder import PromptBuilder
 
 
-class LiteLLMLLMClient(BaseLLMClient):
+class LiteLLMClient(BaseLLMClient):
     provider: str = ""
     user_tag: Role = "user"
     assistant_tag: Role = "model"
@@ -241,7 +241,7 @@ class LiteLLMLLMClient(BaseLLMClient):
                     finish_reason_val = first_choice.get("finish_reason")
                 else:
                     finish_reason_val = getattr(first_choice, "finish_reason", None)
-            mapped_finish_reason = LiteLLMLLMClient._map_finish_reason(finish_reason_val)
+            mapped_finish_reason = LiteLLMClient._map_finish_reason(finish_reason_val)
 
             content_parts: list[Part | Any] = list(parts)
             return Response(
@@ -293,7 +293,7 @@ class LiteLLMLLMClient(BaseLLMClient):
                     finish_reason_val = first_choice.get("finish_reason")
                 else:
                     finish_reason_val = getattr(first_choice, "finish_reason", None)
-            mapped_finish_reason = LiteLLMLLMClient._map_finish_reason(finish_reason_val)
+            mapped_finish_reason = LiteLLMClient._map_finish_reason(finish_reason_val)
 
             content_parts2: list[Part | Any] = list(parts)
             return Response(
@@ -311,7 +311,7 @@ class LiteLLMLLMClient(BaseLLMClient):
             raise ValueError(f"Unsupported result_type: {result_type}. Supported types are: None, 'json', or a Pydantic model.")
 
 
-class LiteLLMLLMClientAsync(BaseLLMClientAsync):
+class LiteLLMClientAsync(BaseLLMClientAsync):
     provider: str = ""
     user_tag: Role = "user"
     assistant_tag: Role = "model"
@@ -341,11 +341,11 @@ class LiteLLMLLMClientAsync(BaseLLMClientAsync):
 
     @staticmethod
     def make_function_call(tool_call) -> FunctionCall | None:
-        return LiteLLMLLMClient.make_function_call(tool_call)
+        return LiteLLMClient.make_function_call(tool_call)
 
     @staticmethod
     def make_usage_metadata(usage) -> UsageMetadata:
-        return LiteLLMLLMClient.make_usage_metadata(usage)
+        return LiteLLMClient.make_usage_metadata(usage)
 
     async def _create(
         self,
@@ -450,7 +450,7 @@ class LiteLLMLLMClientAsync(BaseLLMClientAsync):
                     finish_reason_val = first_choice.get("finish_reason")
                 else:
                     finish_reason_val = getattr(first_choice, "finish_reason", None)
-            mapped_finish_reason = LiteLLMLLMClient._map_finish_reason(finish_reason_val)
+            mapped_finish_reason = LiteLLMClient._map_finish_reason(finish_reason_val)
 
             content_parts3: list[Part | Any] = list(parts)
             return Response(
@@ -502,7 +502,7 @@ class LiteLLMLLMClientAsync(BaseLLMClientAsync):
                     finish_reason_val = first_choice.get("finish_reason")
                 else:
                     finish_reason_val = getattr(first_choice, "finish_reason", None)
-            mapped_finish_reason = LiteLLMLLMClient._map_finish_reason(finish_reason_val)
+            mapped_finish_reason = LiteLLMClient._map_finish_reason(finish_reason_val)
 
             content_parts4: list[Part | Any] = list(parts)
             return Response(
