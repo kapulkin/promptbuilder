@@ -57,7 +57,7 @@ class GoogleLLMClient(BaseLLMClient):
             raise ValueError("To create a google llm client you need to either set the environment variable GOOGLE_API_KEY or pass the api_key in string format")
         super().__init__(GoogleLLMClient.PROVIDER, model, decorator_configs=decorator_configs, default_thinking_config=default_thinking_config, default_max_tokens=default_max_tokens)
         self._api_key = api_key
-        self.client = Client(api_key=api_key)
+        self.client = Client(api_key=api_key, **kwargs)
     
     @property
     def api_key(self) -> str:
@@ -237,8 +237,8 @@ class GoogleLLMClientAsync(BaseLLMClientAsync):
             raise ValueError("To create a google llm client you need to either set the environment variable GOOGLE_API_KEY or pass the api_key in string format")
         super().__init__(GoogleLLMClientAsync.PROVIDER, model, decorator_configs=decorator_configs, default_thinking_config=default_thinking_config, default_max_tokens=default_max_tokens)
         self._api_key = api_key
-        self.client = Client(api_key=api_key)
-    
+        self.client = Client(api_key=api_key, **kwargs)
+
     @property
     def api_key(self) -> str:
         return self._api_key
