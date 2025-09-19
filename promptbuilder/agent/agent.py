@@ -49,7 +49,7 @@ class Agent(Generic[MessageType, ContextType]):
             return messages
 
     async def _answer_with_llm(self, **kwargs: Any) -> Response:
-        messages = self._formatted_messages(self.context.dialog_history.last_messages())
+        messages = self._formatted_messages(self.context.dialog_history.last_content_messages())
         return await run_async(self.llm_client.create,
             messages=messages,
             system_message=self.system_message(**kwargs),
@@ -73,7 +73,7 @@ class AgentRouter(Agent[MessageType, ContextType]):
         callable_trs = [self.tools.get(name) or self.routes.get(name) for name in self.tr_names if name not in trs_to_exclude]
         trs = [callable_tr.tool for callable_tr in callable_trs]
 
-        messages = self._formatted_messages(self.context.dialog_history.last_messages())
+        messages = self._formatted_messages(self.context.dialog_history.last_content_messages())
         response = await run_async(self.llm_client.create,
             messages=messages,
             system_message=self.system_message(callable_trs=callable_trs),
