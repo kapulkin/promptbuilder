@@ -96,11 +96,13 @@ class Content(BaseModel):
     role: Role | None = None
     
     def as_str(self) -> str:
-        if self.parts is None:
-            return ""
-        else:
-            return "\n".join([(part.text or "") for part in self.parts])
+        return content_to_str(self)
 
+def content_to_str(content: Content) -> str:
+    if content.parts is None:
+        return ""
+    else:
+        return "".join([part.text for part in content.parts if part.text])
 
 class FinishReason(Enum):
   """Output only. The reason why the model stopped generating tokens.

@@ -7,7 +7,7 @@ import logfire
 
 from promptbuilder.llm_client.utils import inherited_decorator
 from promptbuilder.llm_client.config import GLOBAL_CONFIG
-from promptbuilder.llm_client.types import Response, UsageMetadata
+from promptbuilder.llm_client.types import Response, UsageMetadata, content_to_str
 
 
 P = ParamSpec("P")
@@ -24,9 +24,9 @@ def extract_span_data(self, *args, **kwargs) -> dict[str, Any]:
         logfire_messages.append({"role": "system", "content": system_message})
     for content in messages:
         if content.role == "user":
-            logfire_messages.append({"role": "user", "content": content.as_str()})
+            logfire_messages.append({"role": "user", "content": content_to_str(content)})
         elif content.role == "model":
-            logfire_messages.append({"role": "assistant", "content": content.as_str()})
+            logfire_messages.append({"role": "assistant", "content": content_to_str(content)})
     span_data["request_data"] = {"messages": logfire_messages}
     span_data["messages"] = messages
     
