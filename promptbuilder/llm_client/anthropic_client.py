@@ -313,7 +313,7 @@ class AnthropicLLMClient(BaseLLMClient):
             raise ValueError(f"Unsupported result type: {result_type}")
     
     @_error_handler
-    def create_stream(
+    def _create_stream(
         self,
         messages: list[Content],
         *,
@@ -576,7 +576,7 @@ class AnthropicLLMClientAsync(BaseLLMClientAsync):
             raise ValueError(f"Unsupported result_type: {result_type}. Supported types are: None, 'json', or a Pydantic model.")
     
     @_error_handler_async
-    async def create_stream(
+    async def _create_stream(
         self,
         messages: list[Content],
         *,

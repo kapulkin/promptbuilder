@@ -266,7 +266,7 @@ class BedrockLLMClient(BaseLLMClient):
             )
     
     @_error_handler
-    def create_stream(
+    def _create_stream(
         self,
         messages: list[Content],
         *,
@@ -560,7 +560,7 @@ class BedrockLLMClientAsync(BaseLLMClientAsync):
                 )
     
     @_error_handler_async
-    async def create_stream(
+    async def _create_stream(
         self,
         messages: list[Content],
         *,

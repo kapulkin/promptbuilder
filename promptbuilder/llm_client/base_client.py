@@ -108,7 +108,7 @@ class BaseLLMClient(ABC, utils.InheritDecoratorsMixin):
 
         finish_reason = response.candidates[0].finish_reason.value if response.candidates and response.candidates[0].finish_reason else None
         if autocomplete:
-            while autocomplete and response.candidates and finish_reason == FinishReason.MAX_TOKENS.value:
+            while response.candidates and finish_reason == FinishReason.MAX_TOKENS.value:
                 BaseLLMClient._append_generated_part(messages, response)
 
                 response = self._create(
@@ -296,7 +296,7 @@ class BaseLLMClient(ABC, utils.InheritDecoratorsMixin):
     @logfire_decorators.create_stream
     @utils.retry_cls
     @utils.rpm_limit_cls
-    def create_stream(
+    def _create_stream(
         self,
         messages: list[Content],
         *,
@@ -305,6 +305,47 @@ class BaseLLMClient(ABC, utils.InheritDecoratorsMixin):
         max_tokens: int | None = None,
     ) -> Iterator[Response]:
         raise NotImplementedError
+    
+    def create_stream(
+        self,
+        messages: list[Content],
+        *,
+        thinking_config: ThinkingConfig | None = None,
+        system_message: str | None = None,
+        max_tokens: int | None = None,
+        autocomplete: bool = False,
+    ) -> Iterator[Response]:
+        if max_tokens is None:
+            max_tokens = self.default_max_tokens
+        
+        stream_messages = []
+
+        total_count = 0
+        for response in self._create_stream(
+            messages=messages,
+            thinking_config=thinking_config,
+            system_message=system_message,
+            max_tokens=max_tokens if not autocomplete else None,
+        ):
+            yield response
+            BaseLLMClient._append_generated_part(stream_messages, response)
+            finish_reason = response.candidates[0].finish_reason.value if response.candidates and response.candidates[0].finish_reason else None
+            total_count += BaseLLMClient._response_out_tokens(response)
+            if finish_reason:
+                if autocomplete:
+                    while response.candidates and finish_reason == FinishReason.MAX_TOKENS.value:
+                        for response in self._create_stream(
+                            messages=messages,
+                            thinking_config=thinking_config,
+                            system_message=system_message,
+                            max_tokens=max_tokens if not autocomplete else None,
+                        ):
+                            yield response
+                            BaseLLMClient._append_generated_part(stream_messages, response)
+                            finish_reason = response.candidates[0].finish_reason.value if response.candidates and response.candidates[0].finish_reason else None
+                            total_count += BaseLLMClient._response_out_tokens(response)
+                        if max_tokens is not None and total_count >= max_tokens:
+                            break
     
     @overload
     def from_text(
@@ -459,7 +500,7 @@ class BaseLLMClientAsync(ABC, utils.InheritDecoratorsMixin):
 
         finish_reason = response.candidates[0].finish_reason.value if response.candidates and response.candidates[0].finish_reason else None
         if autocomplete:
-            while autocomplete and response.candidates and finish_reason == FinishReason.MAX_TOKENS.value:
+            while response.candidates and finish_reason == FinishReason.MAX_TOKENS.value:
                 BaseLLMClient._append_generated_part(messages, response)
 
                 response = await self._create(
@@ -609,7 +650,7 @@ class BaseLLMClientAsync(ABC, utils.InheritDecoratorsMixin):
     @logfire_decorators.create_stream_async
     @utils.retry_cls_async
     @utils.rpm_limit_cls_async
-    async def create_stream(
+    async def _create_stream(
         self,
         messages: list[Content],
         *,
@@ -619,6 +660,47 @@ class BaseLLMClientAsync(ABC, utils.InheritDecoratorsMixin):
     ) -> AsyncIterator[Response]:
         raise NotImplementedError
     
+    async def create_stream(
+        self,
+        messages: list[Content],
+        *,
+        thinking_config: ThinkingConfig | None = None,
+        system_message: str | None = None,
+        max_tokens: int | None = None,
+        autocomplete: bool = False,
+    ) -> AsyncIterator[Response]:          
+        if max_tokens is None:
+            max_tokens = self.default_max_tokens
+        
+        total_count = 0
+        stream_iter = await self._create_stream(
+            messages=messages,
+            thinking_config=thinking_config,
+            system_message=system_message,
+            max_tokens=max_tokens if not autocomplete else None,
+        )
+        async for response in stream_iter:
+            yield response
+            BaseLLMClient._append_generated_part(messages, response)
+            finish_reason = response.candidates[0].finish_reason.value if response.candidates and response.candidates[0].finish_reason else None
+            total_count += BaseLLMClient._response_out_tokens(response)
+            if finish_reason:
+                if autocomplete:
+                    while response.candidates and finish_reason == FinishReason.MAX_TOKENS.value:
+                        stream_iter = await self._create_stream(
+                            messages=messages,
+                            thinking_config=thinking_config,
+                            system_message=system_message,
+                            max_tokens=max_tokens if not autocomplete else None,
+                        )
+                        async for response in stream_iter:
+                            yield response
+                            BaseLLMClient._append_generated_part(messages, response)
+                            finish_reason = response.candidates[0].finish_reason.value if response.candidates and response.candidates[0].finish_reason else None
+                            total_count += BaseLLMClient._response_out_tokens(response)
+                        if max_tokens is not None and total_count >= max_tokens:
+                            break
+
     @overload
     async def from_text(
         self,

@@ -142,7 +142,7 @@ class GoogleLLMClient(BaseLLMClient):
             raise ValueError(f"Unsupported result_type: {result_type}. Supported types are: None, 'json', or a Pydantic model.")
     
     @_error_handler
-    def create_stream(
+    def _create_stream(
         self,
         messages: list[Content],
         *,
@@ -163,7 +163,7 @@ class GoogleLLMClient(BaseLLMClient):
         
         response = self.client.models.generate_content_stream(
             model=self.model,
-            contents=messages,
+            contents=[msg.model_dump() for msg in  messages],
             config=config,
         )
         return response
@@ -290,7 +290,7 @@ class GoogleLLMClientAsync(BaseLLMClientAsync):
             raise ValueError(f"Unsupported result_type: {result_type}. Supported types are: None, 'json', or a Pydantic model.")
     
     @_error_handler_async
-    async def create_stream(
+    async def _create_stream(
         self,
         messages: list[Content],
         *,
@@ -311,7 +311,7 @@ class GoogleLLMClientAsync(BaseLLMClientAsync):
         
         response = await self.client.aio.models.generate_content_stream(
             model=self.model,
-            contents=messages,
+            contents=[msg.model_dump() for msg in  messages],
             config=config,
         )
         return response

@@ -241,7 +241,7 @@ class LiteLLMClient(BaseLLMClient):
                     finish_reason_val = first_choice.get("finish_reason")
                 else:
                     finish_reason_val = getattr(first_choice, "finish_reason", None)
-            mapped_finish_reason = LiteLLMClient._map_finish_reason(finish_reason_val)
+            mapped_finish_reason = LiteLLMLLMClient._map_finish_reason(finish_reason_val)
 
             content_parts: list[Part | Any] = list(parts)
             return Response(
@@ -293,7 +293,7 @@ class LiteLLMClient(BaseLLMClient):
                     finish_reason_val = first_choice.get("finish_reason")
                 else:
                     finish_reason_val = getattr(first_choice, "finish_reason", None)
-            mapped_finish_reason = LiteLLMClient._map_finish_reason(finish_reason_val)
+            mapped_finish_reason = LiteLLMLLMClient._map_finish_reason(finish_reason_val)
 
             content_parts2: list[Part | Any] = list(parts)
             return Response(
@@ -309,6 +309,125 @@ class LiteLLMClient(BaseLLMClient):
             )
         else:
             raise ValueError(f"Unsupported result_type: {result_type}. Supported types are: None, 'json', or a Pydantic model.")
+
+    def _create_stream(
+        self,
+        messages: list[Content],
+        *,
+        thinking_config: ThinkingConfig | None = None,
+        system_message: str | None = None,
+        max_tokens: int | None = None,
+        timeout: float | None = None,
+        tools: list[Tool] | None = None,
+        tool_config: ToolConfig = ToolConfig(),
+    ):
+        """Streaming variant: yields Response objects with partial text/function calls.
+
+        Only supports plain text/function-call streaming (no structured pydantic parsing mid-stream).
+        Final yielded Response contains usage + finish_reason.
+        """
+        litellm_messages: list[dict[str, str]] = []
+        if system_message is not None:
+            litellm_messages.append({"role": "system", "content": system_message})
+        for message in messages:
+            if message.role == "user":
+                litellm_messages.append({"role": "user", "content": message.as_str()})
+            elif message.role == "model":
+                litellm_messages.append({"role": "assistant", "content": message.as_str()})
+
+        litellm_model = f"{self.provider}/{self.model}"
+        kwargs: dict[str, Any] = {
+            "model": litellm_model,
+            "messages": litellm_messages,
+            "stream": True,
+        }
+        if self._api_key:
+            kwargs["api_key"] = self._api_key
+        if self.provider == "ollama":
+            base_url = os.getenv("OLLAMA_BASE_URL") or os.getenv("LITELLM_OLLAMA_BASE_URL")
+            if base_url:
+                kwargs["api_base"] = base_url
+        if max_tokens is not None:
+            kwargs["max_tokens"] = max_tokens
+        if timeout is not None:
+            kwargs["request_timeout"] = timeout
+
+        if tools is not None:
+            lite_tools = []
+            allowed_function_names = None
+            if tool_config.function_calling_config is not None:
+                allowed_function_names = tool_config.function_calling_config.allowed_function_names
+            for tool in tools:
+                for func_decl in tool.function_declarations or []:
+                    if allowed_function_names is None or func_decl.name in allowed_function_names:
+                        parameters = func_decl.parameters
+                        if parameters is not None:
+                            parameters = parameters.model_dump(exclude_none=True)
+                        else:
+                            parameters = {"type": "object", "properties": {}, "required": [], "additionalProperties": False}
+                        lite_tools.append({
+                            "type": "function",
+                            "function": {
+                                "name": func_decl.name,
+                                "description": func_decl.description,
+                                "parameters": parameters,
+                            },
+                        })
+            if lite_tools:
+                kwargs["tools"] = lite_tools
+
+        stream_iter = litellm.completion(**kwargs)
+        # LiteLLM returns a generator of events / chunks.
+        # We'll accumulate text, track usage and finish_reason when present.
+        accumulated_parts: list[Part] = []
+        final_usage = None
+        finish_reason_val = None
+
+        for chunk in stream_iter:  # type: ignore
+            # Attempt to extract delta content (OpenAI style)
+            choices = getattr(chunk, "choices", None) or (chunk.get("choices") if isinstance(chunk, dict) else None)
+            if choices:
+                delta_choice = choices[0]
+                # finish_reason may appear early; capture last non-null
+                fr = None
+                if isinstance(delta_choice, dict):
+                    fr = delta_choice.get("finish_reason")
+                    delta_msg = delta_choice.get("delta") or delta_choice.get("message") or {}
+                else:
+                    fr = getattr(delta_choice, "finish_reason", None)
+                    delta_msg = getattr(delta_choice, "delta", None) or getattr(delta_choice, "message", None) or {}
+                if fr is not None:
+                    finish_reason_val = fr
+                # Handle tool calls if present in streaming (rare - ignoring detailed incremental args for now)
+                content_piece = None
+                if isinstance(delta_msg, dict):
+                    content_piece = delta_msg.get("content")
+                else:
+                    content_piece = getattr(delta_msg, "content", None)
+                if content_piece:
+                    accumulated_parts.append(Part(text=content_piece))
+                    yield Response(candidates=[Candidate(content=Content(parts=[Part(text=content_piece)], role="model"))])
+            # Usage may appear at final chunk in some providers (OpenAI style: usage object)
+            # Collect usage if present as attribute or key
+            usage_obj = None
+            if isinstance(chunk, dict):
+                usage_obj = chunk.get("usage")
+            else:
+                usage_obj = getattr(chunk, "usage", None)
+            if usage_obj is not None:
+                final_usage = usage_obj
+
+        # After stream ends, emit final Response with aggregated parts, usage, and finish_reason
+        usage_md = self.make_usage_metadata(final_usage)
+        mapped_finish_reason = LiteLLMClient._map_finish_reason(finish_reason_val)
+        final_parts: list[Part | Any] = list(accumulated_parts)
+        yield Response(
+            candidates=[Candidate(
+                content=Content(parts=final_parts, role="model"),
+                finish_reason=mapped_finish_reason,
+            )],
+            usage_metadata=usage_md,
+        )
 
 
 class LiteLLMClientAsync(BaseLLMClientAsync):
@@ -341,11 +460,11 @@ class LiteLLMClientAsync(BaseLLMClientAsync):
 
     @staticmethod
     def make_function_call(tool_call) -> FunctionCall | None:
-        return LiteLLMClient.make_function_call(tool_call)
+        return LiteLLMLLMClient.make_function_call(tool_call)
 
     @staticmethod
     def make_usage_metadata(usage) -> UsageMetadata:
-        return LiteLLMClient.make_usage_metadata(usage)
+        return LiteLLMLLMClient.make_usage_metadata(usage)
 
     async def _create(
         self,
@@ -450,7 +569,7 @@ class LiteLLMClientAsync(BaseLLMClientAsync):
                     finish_reason_val = first_choice.get("finish_reason")
                 else:
                     finish_reason_val = getattr(first_choice, "finish_reason", None)
-            mapped_finish_reason = LiteLLMClient._map_finish_reason(finish_reason_val)
+            mapped_finish_reason = LiteLLMLLMClient._map_finish_reason(finish_reason_val)
 
             content_parts3: list[Part | Any] = list(parts)
             return Response(
@@ -502,7 +621,7 @@ class LiteLLMClientAsync(BaseLLMClientAsync):
                     finish_reason_val = first_choice.get("finish_reason")
                 else:
                     finish_reason_val = getattr(first_choice, "finish_reason", None)
-            mapped_finish_reason = LiteLLMClient._map_finish_reason(finish_reason_val)
+            mapped_finish_reason = LiteLLMLLMClient._map_finish_reason(finish_reason_val)
 
             content_parts4: list[Part | Any] = list(parts)
             return Response(
@@ -518,3 +637,111 @@ class LiteLLMClientAsync(BaseLLMClientAsync):
             )
         else:
             raise ValueError(f"Unsupported result_type: {result_type}. Supported types are: None, 'json', or a Pydantic model.")
+
+    async def _create_stream(
+        self,
+        messages: list[Content],
+        *,
+        thinking_config: ThinkingConfig | None = None,
+        system_message: str | None = None,
+        max_tokens: int | None = None,
+        timeout: float | None = None,
+        tools: list[Tool] | None = None,
+        tool_config: ToolConfig = ToolConfig(),
+    ):
+        """Async streaming variant mirroring sync version."""
+        litellm_messages: list[dict[str, str]] = []
+        if system_message is not None:
+            litellm_messages.append({"role": "system", "content": system_message})
+        for message in messages:
+            if message.role == "user":
+                litellm_messages.append({"role": "user", "content": message.as_str()})
+            elif message.role == "model":
+                litellm_messages.append({"role": "assistant", "content": message.as_str()})
+
+        litellm_model = f"{self.provider}/{self.model}"
+        kwargs: dict[str, Any] = {
+            "model": litellm_model,
+            "messages": litellm_messages,
+            "stream": True,
+        }
+        if self._api_key:
+            kwargs["api_key"] = self._api_key
+        if self.provider == "ollama":
+            base_url = os.getenv("OLLAMA_BASE_URL") or os.getenv("LITELLM_OLLAMA_BASE_URL")
+            if base_url:
+                kwargs["api_base"] = base_url
+        if max_tokens is not None:
+            kwargs["max_tokens"] = max_tokens
+        if timeout is not None:
+            kwargs["request_timeout"] = timeout
+
+        if tools is not None:
+            lite_tools = []
+            allowed_function_names = None
+            if tool_config.function_calling_config is not None:
+                allowed_function_names = tool_config.function_calling_config.allowed_function_names
+            for tool in tools:
+                for func_decl in tool.function_declarations or []:
+                    if allowed_function_names is None or func_decl.name in allowed_function_names:
+                        parameters = func_decl.parameters
+                        if parameters is not None:
+                            parameters = parameters.model_dump(exclude_none=True)
+                        else:
+                            parameters = {"type": "object", "properties": {}, "required": [], "additionalProperties": False}
+                        lite_tools.append({
+                            "type": "function",
+                            "function": {
+                                "name": func_decl.name,
+                                "description": func_decl.description,
+                                "parameters": parameters,
+                            },
+                        })
+            if lite_tools:
+                kwargs["tools"] = lite_tools
+
+        stream_iter = await litellm.acompletion(**kwargs)
+
+        accumulated_parts: list[Part] = []
+        final_usage = None
+        finish_reason_val = None
+
+        async for chunk in stream_iter:  # type: ignore
+            choices = getattr(chunk, "choices", None) or (chunk.get("choices") if isinstance(chunk, dict) else None)
+            if choices:
+                delta_choice = choices[0]
+                fr = None
+                if isinstance(delta_choice, dict):
+                    fr = delta_choice.get("finish_reason")
+                    delta_msg = delta_choice.get("delta") or delta_choice.get("message") or {}
+                else:
+                    fr = getattr(delta_choice, "finish_reason", None)
+                    delta_msg = getattr(delta_choice, "delta", None) or getattr(delta_choice, "message", None) or {}
+                if fr is not None:
+                    finish_reason_val = fr
+                content_piece = None
+                if isinstance(delta_msg, dict):
+                    content_piece = delta_msg.get("content")
+                else:
+                    content_piece = getattr(delta_msg, "content", None)
+                if content_piece:
+                    accumulated_parts.append(Part(text=content_piece))
+                    yield Response(candidates=[Candidate(content=Content(parts=[Part(text=content_piece)], role="model"))])
+            usage_obj = None
+            if isinstance(chunk, dict):
+                usage_obj = chunk.get("usage")
+            else:
+                usage_obj = getattr(chunk, "usage", None)
+            if usage_obj is not None:
+                final_usage = usage_obj
+
+        usage_md = self.make_usage_metadata(final_usage)
+        mapped_finish_reason = LiteLLMClient._map_finish_reason(finish_reason_val)
+        final_parts_async: list[Part | Any] = list(accumulated_parts)
+        yield Response(
+            candidates=[Candidate(
+                content=Content(parts=final_parts_async, role="model"),
+                finish_reason=mapped_finish_reason,
+            )],
+            usage_metadata=usage_md,
+        )
