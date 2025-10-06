@@ -321,32 +321,32 @@ class BaseLLMClient(ABC, utils.InheritDecoratorsMixin):
         stream_messages = []
 
         total_count = 0
+        response = None
         for response in self._create_stream(
             messages=messages,
             thinking_config=thinking_config,
             system_message=system_message,
             max_tokens=max_tokens if not autocomplete else None,
         ):
-            yield response
             BaseLLMClient._append_generated_part(stream_messages, response)
-            finish_reason = response.candidates[0].finish_reason.value if response.candidates and response.candidates[0].finish_reason else None
             total_count += BaseLLMClient._response_out_tokens(response)
-            if finish_reason:
-                if autocomplete:
-                    while response.candidates and finish_reason == FinishReason.MAX_TOKENS.value:
-                        for response in self._create_stream(
-                            messages=messages,
-                            thinking_config=thinking_config,
-                            system_message=system_message,
-                            max_tokens=max_tokens if not autocomplete else None,
-                        ):
-                            yield response
-                            BaseLLMClient._append_generated_part(stream_messages, response)
-                            finish_reason = response.candidates[0].finish_reason.value if response.candidates and response.candidates[0].finish_reason else None
-                            total_count += BaseLLMClient._response_out_tokens(response)
-                        if max_tokens is not None and total_count >= max_tokens:
-                            break
-    
+            yield response
+        finish_reason = response.candidates[0].finish_reason.value if response and response.candidates and response.candidates[0].finish_reason else None
+        if finish_reason and autocomplete:
+            while response.candidates and finish_reason == FinishReason.MAX_TOKENS.value:
+                for response in self._create_stream(
+                    messages=messages,
+                    thinking_config=thinking_config,
+                    system_message=system_message,
+                    max_tokens=max_tokens if not autocomplete else None,
+                ):
+                    BaseLLMClient._append_generated_part(stream_messages, response)
+                    total_count += BaseLLMClient._response_out_tokens(response)
+                    yield response
+                finish_reason = response.candidates[0].finish_reason.value if response.candidates and response.candidates[0].finish_reason else None
+                if max_tokens is not None and total_count >= max_tokens:
+                    break
+
     @overload
     def from_text(
         self,
@@ -679,27 +679,28 @@ class BaseLLMClientAsync(ABC, utils.InheritDecoratorsMixin):
             system_message=system_message,
             max_tokens=max_tokens if not autocomplete else None,
         )
+        response = None
         async for response in stream_iter:
-            yield response
             BaseLLMClient._append_generated_part(messages, response)
-            finish_reason = response.candidates[0].finish_reason.value if response.candidates and response.candidates[0].finish_reason else None
             total_count += BaseLLMClient._response_out_tokens(response)
-            if finish_reason:
-                if autocomplete:
-                    while response.candidates and finish_reason == FinishReason.MAX_TOKENS.value:
-                        stream_iter = await self._create_stream(
-                            messages=messages,
-                            thinking_config=thinking_config,
-                            system_message=system_message,
-                            max_tokens=max_tokens if not autocomplete else None,
-                        )
-                        async for response in stream_iter:
-                            yield response
-                            BaseLLMClient._append_generated_part(messages, response)
-                            finish_reason = response.candidates[0].finish_reason.value if response.candidates and response.candidates[0].finish_reason else None
-                            total_count += BaseLLMClient._response_out_tokens(response)
-                        if max_tokens is not None and total_count >= max_tokens:
-                            break
+            yield response
+        
+        finish_reason = response.candidates[0].finish_reason.value if response and response.candidates and response.candidates[0].finish_reason else None
+        if finish_reason and autocomplete:
+            while response.candidates and finish_reason == FinishReason.MAX_TOKENS.value:
+                stream_iter = await self._create_stream(
+                    messages=messages,
+                    thinking_config=thinking_config,
+                    system_message=system_message,
+                    max_tokens=max_tokens if not autocomplete else None,
+                )
+                async for response in stream_iter:
+                    yield response
+                    BaseLLMClient._append_generated_part(messages, response)
+                    total_count += BaseLLMClient._response_out_tokens(response)
+                finish_reason = response.candidates[0].finish_reason.value if response.candidates and response.candidates[0].finish_reason else None
+                if max_tokens is not None and total_count >= max_tokens:
+                    break
 
     @overload
     async def from_text(
