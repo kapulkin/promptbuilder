@@ -319,31 +319,44 @@ class BaseLLMClient(ABC, utils.InheritDecoratorsMixin):
             max_tokens = self.default_max_tokens
         
         stream_messages = []
-
         total_count = 0
-        response = None
-        for response in self._create_stream(
-            messages=messages,
-            thinking_config=thinking_config,
-            system_message=system_message,
-            max_tokens=max_tokens if not autocomplete else None,
-        ):
+        response: Response | None = None
+
+        # Factory to (re)create the underlying provider stream using current accumulated state
+        def _stream_factory():
+            nonlocal response, total_count
+            tries = 3
+            while tries > 0:
+                try:
+                    iter = self._create_stream(
+                        messages=messages + stream_messages,
+                        thinking_config=thinking_config,
+                        system_message=system_message,
+                        max_tokens=max_tokens if not autocomplete else None,
+                    )
+                    for response in iter:
+                        yield response
+                    break
+                except Exception as e:
+                    tries -= 1
+                    if tries == 0:
+                        raise
+                    logger.warning(f"Stream generation error: {e}, retrying...")
+
+        # Use retry to iterate through the stream; on exception previously yielded parts
+        # are already merged into stream_messages so resumed attempts continue generation.
+        for response in _stream_factory():
             BaseLLMClient._append_generated_part(stream_messages, response)
             total_count += BaseLLMClient._response_out_tokens(response)
             yield response
         finish_reason = response.candidates[0].finish_reason.value if response and response.candidates and response.candidates[0].finish_reason else None
         if finish_reason and autocomplete:
             while response.candidates and finish_reason == FinishReason.MAX_TOKENS.value:
-                for response in self._create_stream(
-                    messages=messages,
-                    thinking_config=thinking_config,
-                    system_message=system_message,
-                    max_tokens=max_tokens if not autocomplete else None,
-                ):
+                for response in _stream_factory():
                     BaseLLMClient._append_generated_part(stream_messages, response)
                     total_count += BaseLLMClient._response_out_tokens(response)
                     yield response
-                finish_reason = response.candidates[0].finish_reason.value if response.candidates and response.candidates[0].finish_reason else None
+                finish_reason = response.candidates[0].finish_reason.value if response and response.candidates and response.candidates[0].finish_reason else None
                 if max_tokens is not None and total_count >= max_tokens:
                     break
 
@@ -673,31 +686,41 @@ class BaseLLMClientAsync(ABC, utils.InheritDecoratorsMixin):
             max_tokens = self.default_max_tokens
         
         total_count = 0
-        stream_iter = await self._create_stream(
-            messages=messages,
-            thinking_config=thinking_config,
-            system_message=system_message,
-            max_tokens=max_tokens if not autocomplete else None,
-        )
         response = None
-        async for response in stream_iter:
-            BaseLLMClient._append_generated_part(messages, response)
-            total_count += BaseLLMClient._response_out_tokens(response)
-            yield response
+
+        async def _stream_factory():
+            nonlocal response, total_count
+            tries = 3
+            while tries > 0:
+                try:
+                    iter = await self._create_stream(
+                        messages=messages,
+                        thinking_config=thinking_config,
+                        system_message=system_message,
+                        max_tokens=max_tokens if not autocomplete else None,
+                    )
+
+                    async for response in iter:
+                        BaseLLMClient._append_generated_part(messages, response)
+                        total_count += BaseLLMClient._response_out_tokens(response)
+                        yield response
+                    break
+                except Exception as e:
+                    tries -= 1
+                    if tries <= 0:
+                        raise
+                    logger.warning(f"Stream generation error: {e}, retrying...")
         
+        stream_iter = _stream_factory()
+        async for response in stream_iter:
+            yield response
+
         finish_reason = response.candidates[0].finish_reason.value if response and response.candidates and response.candidates[0].finish_reason else None
         if finish_reason and autocomplete:
             while response.candidates and finish_reason == FinishReason.MAX_TOKENS.value:
-                stream_iter = await self._create_stream(
-                    messages=messages,
-                    thinking_config=thinking_config,
-                    system_message=system_message,
-                    max_tokens=max_tokens if not autocomplete else None,
-                )
+                stream_iter = _stream_factory()
                 async for response in stream_iter:
                     yield response
-                    BaseLLMClient._append_generated_part(messages, response)
-                    total_count += BaseLLMClient._response_out_tokens(response)
                 finish_reason = response.candidates[0].finish_reason.value if response.candidates and response.candidates[0].finish_reason else None
                 if max_tokens is not None and total_count >= max_tokens:
                     break
