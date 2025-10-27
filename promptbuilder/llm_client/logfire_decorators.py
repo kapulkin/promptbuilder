@@ -46,9 +46,12 @@ def extract_response_data(response: Response) -> dict[str, Any]:
     response_data = {"message": {"role": "assistant"}}
     response_data["message"]["content"] = response.text
     tool_calls = []
-    for part in response.candidates[0].content.parts:
-        if part.function_call is not None:
-            tool_calls.append({"function": {"name": part.function_call.name, "arguments": part.function_call.args}})
+    if response.candidates is not None and len(response.candidates) > 0:
+        content = response.candidates[0].content
+        if content is not None and content.parts is not None:
+            for part in content.parts:
+                if part.function_call is not None:
+                    tool_calls.append({"function": {"name": part.function_call.name, "arguments": part.function_call.args}})
     if len(tool_calls) > 0:
         response_data["message"]["tool_calls"] = tool_calls
     return response_data
