@@ -134,6 +134,7 @@ class BaseLLMClient(ABC, utils.InheritDecoratorsMixin):
     @logfire_decorators.create
     @utils.retry_cls
     @utils.rpm_limit_cls
+    @utils.tpm_limit_cls
     @abstractmethod
     def _create(
         self,
@@ -296,6 +297,7 @@ class BaseLLMClient(ABC, utils.InheritDecoratorsMixin):
     @logfire_decorators.create_stream
     @utils.retry_cls
     @utils.rpm_limit_cls
+    @utils.tpm_limit_cls
     def _create_stream(
         self,
         messages: list[Content],
@@ -539,6 +541,7 @@ class BaseLLMClientAsync(ABC, utils.InheritDecoratorsMixin):
     @logfire_decorators.create_async
     @utils.retry_cls_async
     @utils.rpm_limit_cls_async
+    @utils.tpm_limit_cls_async
     @abstractmethod
     async def _create(
         self,
@@ -663,6 +666,7 @@ class BaseLLMClientAsync(ABC, utils.InheritDecoratorsMixin):
     @logfire_decorators.create_stream_async
     @utils.retry_cls_async
     @utils.rpm_limit_cls_async
+    @utils.tpm_limit_cls_async
     async def _create_stream(
         self,
         messages: list[Content],
