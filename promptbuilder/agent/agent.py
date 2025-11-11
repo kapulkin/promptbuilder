@@ -85,18 +85,18 @@ class AgentRouter(Agent[MessageType, ContextType]):
         for part in content.parts:
             if part.function_call is None:
                 if part.text is not None:
-                    self.context.dialog_history.add_message(Content(parts=[Part(text=part.text, thought=part.thought)], role="model"))
+                    self.context.dialog_history.add_message(Content(parts=[Part(text=part.text)], role="model"))
             else:
                 tr_name = part.function_call.name
-                args = part.function_call.args
-                if args is None:
-                    args = {}
+                tr_args = part.function_call.args
+                if tr_args is None:
+                    tr_args = {}
 
                 route = self.routes.get(tr_name)
                 if route is not None:
                     self.last_used_tr_name = tr_name
-                    logger.debug("Route %s called with args: %s", tr_name, args)
-                    merged_args = {**kwargs, **args}
+                    logger.debug("Route %s called with args: %s", tr_name, tr_args)
+                    merged_args = {**kwargs, **tr_args}
                     result = await route(**merged_args)
                     logger.debug("Route %s result: %s", tr_name, result)
                     trs_to_exclude = trs_to_exclude | {tr_name}
@@ -109,8 +109,8 @@ class AgentRouter(Agent[MessageType, ContextType]):
                 if tool is not None:
                     self.last_used_tr_name = tr_name
                     self.context.dialog_history.add_message(content)
-                    logger.debug("Tool %s called with args: %s", tr_name, args)
-                    tool_response = await tool(**args)
+                    logger.debug("Tool %s called with args: %s", tr_name, tr_args)
+                    tool_response = await tool(**tr_args)
                     logger.debug("Tool %s response: %s", tr_name, tool_response)
                     self.context.dialog_history.add_message(tool_response.candidates[0].content)
                     trs_to_exclude = trs_to_exclude | {tr_name}
