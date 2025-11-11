@@ -14,7 +14,8 @@ setup(
         "aioboto3",
         "litellm",
         "httpx",
-        "aiohttp"
+        "aiohttp",
+        "tiktoken"
     ],
     author="Kapulkin Stanislav",
     author_email="kapulkin@gmail.com",

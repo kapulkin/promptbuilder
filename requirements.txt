@@ -10,3 +10,4 @@ botocore
 httpx
 aiohttp
 litellm
+tiktoken
