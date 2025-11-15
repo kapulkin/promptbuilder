@@ -205,7 +205,7 @@ class OpenaiLLMClient(BaseLLMClient):
             elif tool_choice_mode == "ANY":
                 openai_kwargs["tool_choice"] = "required"
         
-        if result_type is None or result_type == "json":
+        if result_type is None:
             # Forward timeout to OpenAI per-request if provided
             if timeout is not None:
                 openai_kwargs["timeout"] = timeout
@@ -228,7 +228,35 @@ class OpenaiLLMClient(BaseLLMClient):
                     candidates_token_count=response.usage.output_tokens,
                     prompt_token_count=response.usage.input_tokens,
                     total_token_count=response.usage.total_tokens,
+                )
+            )
+        elif result_type == "json":
+            # Forward timeout to OpenAI per-request if provided
+            if timeout is not None:
+                openai_kwargs["timeout"] = timeout
+            response = self.client.responses.create(**openai_kwargs, text={ "format" : { "type": "json_object" } })
+            
+            response_text = ""
+            parts: list[Part] = []
+            for output_item in response.output:
+                if output_item.type == "message":
+                    for content in output_item.content:
+                        parts.append(Part(text=content.text))
+                        response_text += content.text
+                elif output_item.type == "reasoning":
+                    for summary in output_item.summary:
+                        parts.append(Part(text=summary.text, thought=True))
+                elif output_item.type == "function_call":
+                    parts.append(Part(function_call=FunctionCall(args=json.loads(output_item.arguments), name=output_item.name)))
+            
+            return Response(
+                candidates=[Candidate(content=Content(parts=parts, role="model"))],
+                usage_metadata=UsageMetadata(
+                    candidates_token_count=response.usage.output_tokens,
+                    prompt_token_count=response.usage.input_tokens,
+                    total_token_count=response.usage.total_tokens,
                 ),
+                parsed=BaseLLMClient.as_json(response_text)
             )
         elif isinstance(result_type, type(BaseModel)):
             if timeout is not None:
@@ -453,7 +481,7 @@ class OpenaiLLMClientAsync(BaseLLMClientAsync):
             elif tool_choice_mode == "ANY":
                 openai_kwargs["tool_choice"] = "required"
         
-        if result_type is None or result_type == "json":
+        if result_type is None:
             if timeout is not None:
                 openai_kwargs["timeout"] = timeout
             response = await self.client.responses.create(**openai_kwargs)
@@ -475,6 +503,32 @@ class OpenaiLLMClientAsync(BaseLLMClientAsync):
                     prompt_token_count=response.usage.input_tokens,
                     total_token_count=response.usage.total_tokens,
                 ),
+            )
+        elif result_type == "json":
+            if timeout is not None:
+                openai_kwargs["timeout"] = timeout
+            response = await self.client.responses.create(**openai_kwargs, text={ "format" : { "type": "json_object" } })
+            parts: list[Part] = []
+            response_text = ""
+            for output_item in response.output:
+                if output_item.type == "message":
+                    for content in output_item.content:
+                        parts.append(Part(text=content.text))
+                        response_text += content.text
+                elif output_item.type == "reasoning":
+                    for summary in output_item.summary:
+                        parts.append(Part(text=summary.text, thought=True))
+                elif output_item.type == "function_call":
+                    parts.append(Part(function_call=FunctionCall(args=json.loads(output_item.arguments), name=output_item.name)))
+            
+            return Response(
+                candidates=[Candidate(content=Content(parts=parts, role="model"))],
+                usage_metadata=UsageMetadata(
+                    candidates_token_count=response.usage.output_tokens,
+                    prompt_token_count=response.usage.input_tokens,
+                    total_token_count=response.usage.total_tokens,
+                ),
+                parsed=BaseLLMClient.as_json(response_text)
             )
         elif isinstance(result_type, type(BaseModel)):
             if timeout is not None:

@@ -253,7 +253,7 @@ class BaseLLMClient(ABC, utils.InheritDecoratorsMixin):
         if result_type is None:
             return response.text
         else:
-            if result_type == "json":
+            if result_type == "json" and response.parsed is None:
                 response.parsed = BaseLLMClient.as_json(response.text)
             return response.parsed
     
@@ -659,7 +659,7 @@ class BaseLLMClientAsync(ABC, utils.InheritDecoratorsMixin):
         if result_type is None:
             return response.text
         else:
-            if result_type == "json":
+            if result_type == "json" and response.parsed is None:
                 response.parsed = BaseLLMClient.as_json(response.text)
             return response.parsed
     
