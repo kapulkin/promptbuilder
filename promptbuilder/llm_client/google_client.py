@@ -123,6 +123,7 @@ class GoogleLLMClient(BaseLLMClient):
                 config=config,
             )
         elif result_type == "json":
+            config.response_mime_type = "application/json"
             response = self.client.models.generate_content(
                 model=self.model,
                 contents=messages,
@@ -273,6 +274,7 @@ class GoogleLLMClientAsync(BaseLLMClientAsync):
         config.thinking_config = thinking_config
 
         if result_type is None or result_type == "json":
+            config.response_mime_type = "application/json"
             return await self.client.aio.models.generate_content(
                 model=self.model,
                 contents=messages,
