@@ -257,9 +257,8 @@ class BaseLLMClient(ABC, utils.InheritDecoratorsMixin):
                 response.parsed = BaseLLMClient.as_json(response.text)
             return response.parsed
     
-
     @staticmethod
-    def _append_generated_part(messages: list[Content], response: Response) -> Content | None:
+    def _responce_to_text(response: Response):
         assert(response.candidates and response.candidates[0].content), "Response must contain at least one candidate with content."
 
         text_parts = [
@@ -268,6 +267,7 @@ class BaseLLMClient(ABC, utils.InheritDecoratorsMixin):
         if text_parts is not None and len(text_parts) > 0:
             response_text = "".join(part.text for part in text_parts)
             is_thought = False
+            return response_text, is_thought
         else:
             thought_parts = [
                 part for part in response.candidates[0].content.parts if part.text and part.thought
@@ -275,17 +275,28 @@ class BaseLLMClient(ABC, utils.InheritDecoratorsMixin):
             if thought_parts is not None and len(thought_parts) > 0:
                 response_text = "".join(part.text for part in thought_parts)
                 is_thought = True
+                return response_text, is_thought
             else:
-                return None
+                return None, None
+
+    @staticmethod
+    def _append_to_message(message: Content, text: str, is_thought: bool):
+        if message.parts and message.parts[-1].text is not None and message.parts[-1].thought == is_thought:
+            message.parts[-1].text += text
+        else:
+            if not message.parts:
+                message.parts = []
+            message.parts.append(Part(text=text, thought=is_thought))
+
+    @staticmethod
+    def _append_generated_part(messages: list[Content], response: Response) -> Content | None:
+        response_text, is_thought = BaseLLMClient._responce_to_text(response)
+        if response_text is None:
+            return None
         
         if len(messages) > 0 and messages[-1].role == "model":
             message_to_append = messages[-1]
-            if message_to_append.parts and message_to_append.parts[-1].text is not None and message_to_append.parts[-1].thought == is_thought:
-                message_to_append.parts[-1].text += response_text
-            else:
-                if not message_to_append.parts:
-                    message_to_append.parts = []
-                message_to_append.parts.append(Part(text=response_text, thought=is_thought))
+            BaseLLMClient._append_to_message(message_to_append, response_text, is_thought)
         else:
             messages.append(Content(parts=[Part(text=response_text, thought=is_thought)], role="model"))
         return messages[-1]
@@ -823,19 +834,65 @@ class CachedLLMClient(BaseLLMClient):
         self.llm_client = llm_client
         self.cache_dir = cache_dir
     
-    def _create(self, messages: list[Content], **kwargs) -> Response:
-        response, messages_dump, cache_path = CachedLLMClient.create_cached(self.llm_client, self.cache_dir, messages, **kwargs)
+    def _create(self, messages: list[Content], system_message: str | None = None, **kwargs) -> Response:
+        response, messages_dump, cache_path = CachedLLMClient.create_cached(self.llm_client, self.cache_dir, messages, system_message, **kwargs)
         if response is not None:
             return response
-        response = self.llm_client.create(messages, **kwargs)
+        response = self.llm_client.create(messages, system_message=system_message, **kwargs)
         CachedLLMClient.save_cache(cache_path, self.llm_client.full_model_name, messages_dump, response)
         return response
 
+
+    def _create_stream(
+        self,
+        messages: list[Content],
+        *,
+        thinking_config: ThinkingConfig | None = None,
+        system_message: str | None = None,
+        max_tokens: int | None = None,
+    ) -> Iterator[Response]:
+        response, messages_dump, cache_path = CachedLLMClient.create_cached(
+            self.llm_client, self.cache_dir, messages,
+            thinking_config=thinking_config,
+            system_message=system_message,
+            max_tokens=max_tokens,
+        )
+        if response is not None:
+            yield response
+            return
+        
+        accumulated_content: Content | None = None
+        final_response: Response | None = None
+        
+        for response in self.llm_client._create_stream(
+            messages=messages,
+            thinking_config=thinking_config,
+            system_message=system_message,
+            max_tokens=max_tokens,
+        ):
+            # Accumulate content from each response chunk
+            if response.candidates and response.candidates[0].content:
+                response_text, is_thought = BaseLLMClient._responce_to_text(response)
+                if response_text is not None:
+                    if accumulated_content is None:
+                        accumulated_content = Content(parts=[], role="model")
+                    BaseLLMClient._append_to_message(accumulated_content, response_text, is_thought or False)
+            final_response = response
+            yield response
+        
+        # Save accumulated response to cache
+        if final_response is not None and accumulated_content is not None and final_response.candidates:
+            cached_response = Response(
+                candidates=[final_response.candidates[0].model_copy(update={"content": accumulated_content})],
+                usage_metadata=final_response.usage_metadata,
+            )
+            CachedLLMClient.save_cache(cache_path, self.llm_client.full_model_name, messages_dump, cached_response)
+
     @staticmethod
-    def create_cached(llm_client: BaseLLMClient | BaseLLMClientAsync, cache_dir: str, messages: list[Content], **kwargs) -> tuple[Response | None, list[dict], str]:
+    def create_cached(llm_client: BaseLLMClient | BaseLLMClientAsync, cache_dir: str, messages: list[Content], system_message: str | None = None, **kwargs) -> tuple[Response | None, list[dict], str]:
         messages_dump = [message.model_dump() for message in messages]
         key = hashlib.sha256(
-            json.dumps((llm_client.full_model_name, messages_dump)).encode()
+            json.dumps((llm_client.full_model_name, messages_dump, system_message)).encode()
         ).hexdigest()
         cache_path = os.path.join(cache_dir, f"{key}.json")
         if os.path.exists(cache_path):
@@ -859,7 +916,7 @@ class CachedLLMClient(BaseLLMClient):
     @staticmethod
     def save_cache(cache_path: str, full_model_name: str, messages_dump: list[dict], response: Response):
         with open(cache_path, 'wt') as f:
-            json.dump({"full_model_name": full_model_name, "request": messages_dump, "response": response.model_dump()}, f, indent=4)
+            json.dump({"full_model_name": full_model_name, "request": messages_dump, "response": Response.model_dump(response, mode="json")}, f, indent=4)
 
 
 class CachedLLMClientAsync(BaseLLMClientAsync):
@@ -873,10 +930,56 @@ class CachedLLMClientAsync(BaseLLMClientAsync):
         self.llm_client = llm_client
         self.cache_dir = cache_dir
 
-    async def _create(self, messages: list[Content], **kwargs) -> Response:
-        response, messages_dump, cache_path = CachedLLMClient.create_cached(self.llm_client, self.cache_dir, messages, **kwargs)
+    async def _create(self, messages: list[Content], system_message: str | None = None, **kwargs) -> Response:
+        response, messages_dump, cache_path = CachedLLMClient.create_cached(self.llm_client, self.cache_dir, messages, system_message, **kwargs)
         if response is not None:
             return response        
-        response = await self.llm_client.create(messages, **kwargs)
+        response = await self.llm_client.create(messages, system_message=system_message, **kwargs)
         CachedLLMClient.save_cache(cache_path, self.llm_client.full_model_name, messages_dump, response)
         return response
+
+
+    async def _create_stream(
+        self,
+        messages: list[Content],
+        *,
+        thinking_config: ThinkingConfig | None = None,
+        system_message: str | None = None,
+        max_tokens: int | None = None,
+    ) -> AsyncIterator[Response]:
+        response, messages_dump, cache_path = CachedLLMClient.create_cached(
+            self.llm_client, self.cache_dir, messages,
+            thinking_config=thinking_config,
+            system_message=system_message,
+            max_tokens=max_tokens,
+        )
+        if response is not None:
+            yield response
+            return
+        
+        accumulated_content: Content | None = None
+        final_response: Response | None = None
+        
+        async for response in self.llm_client._create_stream(
+            messages=messages,
+            thinking_config=thinking_config,
+            system_message=system_message,
+            max_tokens=max_tokens,
+        ):
+            # Accumulate content from each response chunk
+            if response.candidates and response.candidates[0].content:
+                response_text, is_thought = BaseLLMClient._responce_to_text(response)
+                if response_text is not None:
+                    if accumulated_content is None:
+                        accumulated_content = Content(parts=[], role="model")
+                    BaseLLMClient._append_to_message(accumulated_content, response_text, is_thought or False)
+            final_response = response
+            yield response
+        
+        # Save accumulated response to cache
+        if final_response is not None and accumulated_content is not None and final_response.candidates:
+            cached_response = Response(
+                candidates=[final_response.candidates[0].model_copy(update={"content": accumulated_content})],
+                usage_metadata=final_response.usage_metadata,
+            )
+            CachedLLMClient.save_cache(cache_path, self.llm_client.full_model_name, messages_dump, cached_response)
