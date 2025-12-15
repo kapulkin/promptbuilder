@@ -58,7 +58,7 @@ class BaseLLMClient(ABC, utils.InheritDecoratorsMixin):
         return self.provider + ":" + self.model
     
     @staticmethod
-    def as_json(text: str) -> Json:
+    def as_json(text: str, raise_on_error: bool = True) -> Json:
         # Remove markdown code block formatting if present
         text = text.strip()
                 
@@ -72,7 +72,9 @@ class BaseLLMClient(ABC, utils.InheritDecoratorsMixin):
         try:
             return json.loads(text, strict=False)
         except json.JSONDecodeError as e:
-            raise ValueError(f"Failed to parse LLM response as JSON:\n{text}")
+            if raise_on_error:
+                raise ValueError(f"Failed to parse LLM response as JSON:\n{text}")
+            return None
 
     def create(
         self,
@@ -109,7 +111,7 @@ class BaseLLMClient(ABC, utils.InheritDecoratorsMixin):
         finish_reason = response.candidates[0].finish_reason.value if response.candidates and response.candidates[0].finish_reason else None
         if autocomplete:
             while response.candidates and finish_reason == FinishReason.MAX_TOKENS.value:
-                BaseLLMClient._append_generated_part(messages, response)
+                BaseLLMClient._append_generated_part(messages, response, result_type)
 
                 response = self._create(
                     messages=messages,
@@ -126,7 +128,7 @@ class BaseLLMClient(ABC, utils.InheritDecoratorsMixin):
                 if max_tokens is not None and total_count >= max_tokens:
                     break
             if response.candidates and response.candidates[0].content:
-                appended_message = BaseLLMClient._append_generated_part(messages, response)
+                appended_message = BaseLLMClient._append_generated_part(messages, response, result_type)
                 if appended_message is not None:
                     response.candidates[0].content = appended_message
         return response
@@ -219,6 +221,7 @@ class BaseLLMClient(ABC, utils.InheritDecoratorsMixin):
         tools: list[Tool] | None = None,
         tool_choice_mode: Literal["ANY", "NONE"] = "NONE",
         autocomplete: bool = False,
+        raise_on_json_error: bool = True,
     ):
         if result_type == "tools":
             response = self.create(
@@ -254,7 +257,10 @@ class BaseLLMClient(ABC, utils.InheritDecoratorsMixin):
             return response.text
         else:
             if result_type == "json" and response.parsed is None:
-                response.parsed = BaseLLMClient.as_json(response.text)
+                text = response.text
+                response.parsed = BaseLLMClient.as_json(text, raise_on_json_error)
+                if response.parsed is None:
+                    return text
             return response.parsed
     
     @staticmethod
@@ -280,7 +286,7 @@ class BaseLLMClient(ABC, utils.InheritDecoratorsMixin):
                 return None, None
 
     @staticmethod
-    def _append_to_message(message: Content, text: str, is_thought: bool):
+    def _append_to_message(message: Content, text: str, is_thought: bool | None):
         if message.parts and message.parts[-1].text is not None and message.parts[-1].thought == is_thought:
             message.parts[-1].text += text
         else:
@@ -289,14 +295,17 @@ class BaseLLMClient(ABC, utils.InheritDecoratorsMixin):
             message.parts.append(Part(text=text, thought=is_thought))
 
     @staticmethod
-    def _append_generated_part(messages: list[Content], response: Response) -> Content | None:
+    def _append_generated_part(messages: list[Content], response: Response, result_type: ResultType = None) -> Content | None:
         response_text, is_thought = BaseLLMClient._responce_to_text(response)
         if response_text is None:
             return None
         
         if len(messages) > 0 and messages[-1].role == "model":
             message_to_append = messages[-1]
-            BaseLLMClient._append_to_message(message_to_append, response_text, is_thought)
+            if result_type is None or result_type == "str":
+                BaseLLMClient._append_to_message(message_to_append, response_text, is_thought)
+            else: # json, pydantic model
+                message_to_append.parts = [Part(text=response_text, thought=is_thought)]
         else:
             messages.append(Content(parts=[Part(text=response_text, thought=is_thought)], role="model"))
         return messages[-1]
@@ -527,7 +536,7 @@ class BaseLLMClientAsync(ABC, utils.InheritDecoratorsMixin):
         finish_reason = response.candidates[0].finish_reason.value if response.candidates and response.candidates[0].finish_reason else None
         if autocomplete:
             while response.candidates and finish_reason == FinishReason.MAX_TOKENS.value:
-                BaseLLMClient._append_generated_part(messages, response)
+                BaseLLMClient._append_generated_part(messages, response, result_type)
 
                 response = await self._create(
                     messages=messages,
@@ -544,7 +553,7 @@ class BaseLLMClientAsync(ABC, utils.InheritDecoratorsMixin):
                 if max_tokens is not None and total_count >= max_tokens:
                     break
             if response.candidates and response.candidates[0].content:
-                appended_message = BaseLLMClient._append_generated_part(messages, response)
+                appended_message = BaseLLMClient._append_generated_part(messages, response, result_type)
                 if appended_message is not None:
                     response.candidates[0].content = appended_message
         return response
@@ -637,6 +646,7 @@ class BaseLLMClientAsync(ABC, utils.InheritDecoratorsMixin):
         tools: list[Tool] | None = None,
         tool_choice_mode: Literal["ANY", "NONE"] = "NONE",
         autocomplete: bool = False,
+        raise_on_json_error: bool = True,
     ):
         if result_type == "tools":
             response = await self._create(
@@ -671,7 +681,10 @@ class BaseLLMClientAsync(ABC, utils.InheritDecoratorsMixin):
             return response.text
         else:
             if result_type == "json" and response.parsed is None:
-                response.parsed = BaseLLMClient.as_json(response.text)
+                text = response.text
+                response.parsed = BaseLLMClient.as_json(text, raise_on_json_error)
+                if response.parsed is None:
+                    return text
             return response.parsed
     
     @logfire_decorators.create_stream_async
