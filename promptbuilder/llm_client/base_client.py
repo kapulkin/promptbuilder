@@ -604,6 +604,7 @@ class BaseLLMClientAsync(ABC, utils.InheritDecoratorsMixin):
         tools: None = None,
         tool_choice_mode: Literal["NONE"] = "NONE",
         autocomplete: bool = False,
+        raise_on_json_error: bool = True,
     ) -> Json: ...
     @overload
     async def create_value(

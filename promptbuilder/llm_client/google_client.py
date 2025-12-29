@@ -7,13 +7,168 @@ from tenacity import RetryError
 from google.genai import Client, types
 
 from promptbuilder.llm_client.base_client import BaseLLMClient, BaseLLMClientAsync, ResultType
-from promptbuilder.llm_client.types import Response, Content, Part, ThinkingConfig, Tool, ToolConfig, Model
+from promptbuilder.llm_client.types import Response, Content, Part, ThinkingConfig, Tool, ToolConfig, Model, FunctionCall, FunctionResponse, Blob, FunctionDeclaration, Schema, FunctionCallingConfig, PartLike
 from promptbuilder.llm_client.config import DecoratorConfigs
 from promptbuilder.llm_client.utils import inherited_decorator
 from promptbuilder.llm_client.exceptions import APIError
 
 
 P = ParamSpec("P")
+
+
+def _convert_blob_to_genai(blob: Blob | None) -> types.Blob | None:
+    """Convert custom Blob to google.genai.types.Blob"""
+    if blob is None:
+        return None
+    return types.Blob.model_construct(**blob.__dict__)
+
+
+def _convert_function_call_to_genai(fc: FunctionCall | None) -> types.FunctionCall | None:
+    """Convert custom FunctionCall to google.genai.types.FunctionCall"""
+    if fc is None:
+        return None
+    return types.FunctionCall.model_construct(**fc.__dict__)
+
+
+def _convert_function_response_to_genai(fr: FunctionResponse | None) -> types.FunctionResponse | None:
+    """Convert custom FunctionResponse to google.genai.types.FunctionResponse"""
+    if fr is None:
+        return None
+    return types.FunctionResponse.model_construct(**fr.__dict__)
+
+
+def _convert_part_to_genai(part: Part | PartLike) -> types.Part:
+    """Convert custom Part or PartLike to google.genai.types.Part"""
+    # Handle inline_data conversion
+    inline_data = None
+    if part.inline_data is not None:
+        if isinstance(part.inline_data, Blob):
+            inline_data = _convert_blob_to_genai(part.inline_data)
+        else:
+            # It's already a types.Blob or compatible object
+            inline_data = types.Blob.model_construct(**part.inline_data.__dict__)
+    
+    # Handle function_call conversion
+    function_call = None
+    if part.function_call is not None:
+        if isinstance(part.function_call, FunctionCall):
+            function_call = _convert_function_call_to_genai(part.function_call)
+        else:
+            # It's already a compatible type
+            function_call = types.FunctionCall.model_construct(**part.function_call.__dict__)
+    
+    # Handle function_response conversion
+    function_response = None
+    if part.function_response is not None:
+        if isinstance(part.function_response, FunctionResponse):
+            function_response = _convert_function_response_to_genai(part.function_response)
+        else:
+            # It's already a compatible type
+            function_response = types.FunctionResponse.model_construct(**part.function_response.__dict__)
+    
+    return types.Part.model_construct(
+        text=part.text,
+        function_call=function_call,
+        function_response=function_response,
+        thought=part.thought,
+        inline_data=inline_data,
+    )
+
+
+def _convert_content_to_genai(content: Content) -> types.Content:
+    """Convert custom Content to google.genai.types.Content"""
+    genai_parts: list[types.Part] | None = None
+    if content.parts is not None:
+        genai_parts = [_convert_part_to_genai(p) for p in content.parts]
+    return types.Content.model_construct(
+        role=content.role,
+        parts=genai_parts,
+    )
+
+
+def _convert_messages_to_genai(messages: list[Content]) -> list[types.Content]:
+    """Convert list of custom Content to list of google.genai.types.Content"""
+    return [_convert_content_to_genai(msg) for msg in messages]
+
+
+def _convert_thinking_config_to_genai(thinking_config: ThinkingConfig | None) -> types.ThinkingConfig | None:
+    """Convert custom ThinkingConfig to google.genai.types.ThinkingConfig"""
+    if thinking_config is None:
+        return None
+    return types.ThinkingConfig.model_construct(**thinking_config.__dict__)
+
+
+def _convert_schema_to_genai(schema: Schema | None) -> types.Schema | None:
+    """Convert custom Schema to google.genai.types.Schema"""
+    if schema is None:
+        return None
+    return types.Schema.model_construct(
+        example=schema.example,
+        pattern=schema.pattern,
+        minimum=schema.minimum,
+        default=schema.default,
+        any_of=[_convert_schema_to_genai(s) for s in schema.any_of] if schema.any_of else None,
+        max_length=schema.max_length,
+        title=schema.title,
+        min_length=schema.min_length,
+        min_properties=schema.min_properties,
+        maximum=schema.maximum,
+        max_properties=schema.max_properties,
+        description=schema.description,
+        enum=schema.enum,
+        format=schema.format,
+        items=_convert_schema_to_genai(schema.items),
+        max_items=schema.max_items,
+        min_items=schema.min_items,
+        nullable=schema.nullable,
+        properties={k: _convert_schema_to_genai(v) for k, v in schema.properties.items()} if schema.properties else None,
+        property_ordering=schema.property_ordering,
+        required=schema.required,
+        type=schema.type,
+    )
+
+
+def _convert_function_declaration_to_genai(fd: FunctionDeclaration) -> types.FunctionDeclaration:
+    """Convert custom FunctionDeclaration to google.genai.types.FunctionDeclaration"""
+    return types.FunctionDeclaration.model_construct(
+        response=_convert_schema_to_genai(fd.response),
+        description=fd.description,
+        name=fd.name,
+        parameters=_convert_schema_to_genai(fd.parameters),
+    )
+
+
+def _convert_tool_to_genai(tool: Tool) -> types.Tool:
+    """Convert custom Tool to google.genai.types.Tool"""
+    genai_declarations = None
+    if tool.function_declarations is not None:
+        genai_declarations = [_convert_function_declaration_to_genai(fd) for fd in tool.function_declarations]
+    return types.Tool.model_construct(
+        function_declarations=genai_declarations,
+    )
+
+
+def _convert_tools_to_genai(tools: list[Tool] | None) -> list[types.Tool] | None:
+    """Convert list of custom Tool to list of google.genai.types.Tool"""
+    if tools is None:
+        return None
+    return [_convert_tool_to_genai(t) for t in tools]
+
+
+def _convert_function_calling_config_to_genai(fcc: FunctionCallingConfig | None) -> types.FunctionCallingConfig | None:
+    """Convert custom FunctionCallingConfig to google.genai.types.FunctionCallingConfig"""
+    if fcc is None:
+        return None
+    return types.FunctionCallingConfig.model_construct(**fcc.__dict__)
+
+
+def _convert_tool_config_to_genai(tool_config: ToolConfig | None) -> types.ToolConfig | None:
+    """Convert custom ToolConfig to google.genai.types.ToolConfig"""
+    if tool_config is None:
+        return None
+    return types.ToolConfig.model_construct(
+        function_calling_config=_convert_function_calling_config_to_genai(tool_config.function_calling_config),
+    )
 
 
 @inherited_decorator
@@ -100,13 +255,18 @@ class GoogleLLMClient(BaseLLMClient):
         tool_config: ToolConfig = ToolConfig(),
     ) -> Response:
         messages = self._preprocess_messages(messages)
+        # Convert custom types to google.genai.types
+        genai_messages = _convert_messages_to_genai(messages)
+        genai_tools = _convert_tools_to_genai(tools)
+        genai_tool_config = _convert_tool_config_to_genai(tool_config)
+        
         if max_tokens is None:
             max_tokens = self.default_max_tokens
         config = types.GenerateContentConfig(
             system_instruction=system_message,
             max_output_tokens=max_tokens,
-            tools=tools,
-            tool_config=tool_config,
+            tools=genai_tools,
+            tool_config=genai_tool_config,
         )
         if timeout is not None:
             # Google processes timeout via HttpOptions on the request/config
@@ -114,19 +274,19 @@ class GoogleLLMClient(BaseLLMClient):
         
         if thinking_config is None:
             thinking_config = self.default_thinking_config
-        config.thinking_config = thinking_config
+        config.thinking_config = _convert_thinking_config_to_genai(thinking_config)
         
         if result_type is None:
             return self.client.models.generate_content(
                 model=self.model,
-                contents=messages,
+                contents=genai_messages,
                 config=config,
             )
         elif result_type == "json":
             config.response_mime_type = "application/json"
             response = self.client.models.generate_content(
                 model=self.model,
-                contents=messages,
+                contents=genai_messages,
                 config=config,
             )
             response.parsed = BaseLLMClient.as_json(response.text)
@@ -136,7 +296,7 @@ class GoogleLLMClient(BaseLLMClient):
             config.response_schema = result_type
             return self.client.models.generate_content(
                 model=self.model,
-                contents=messages,
+                contents=genai_messages,
                 config=config,
             )
         else:
@@ -151,6 +311,9 @@ class GoogleLLMClient(BaseLLMClient):
         system_message: str | None = None,
         max_tokens: int | None = None,
     ) -> Iterator[Response]:
+        # Convert custom types to google.genai.types
+        genai_messages = _convert_messages_to_genai(messages)
+        
         if max_tokens is None:
             max_tokens = self.default_max_tokens
         config = types.GenerateContentConfig(
@@ -160,11 +323,11 @@ class GoogleLLMClient(BaseLLMClient):
         
         if thinking_config is None:
             thinking_config = self.default_thinking_config
-        config.thinking_config = thinking_config
+        config.thinking_config = _convert_thinking_config_to_genai(thinking_config)
         
         response = self.client.models.generate_content_stream(
             model=self.model,
-            contents=[msg.model_dump() for msg in  messages],
+            contents=genai_messages,
             config=config,
         )
         return response
@@ -258,32 +421,37 @@ class GoogleLLMClientAsync(BaseLLMClientAsync):
         tool_config: ToolConfig = ToolConfig(),
     ) -> Response:
         messages = GoogleLLMClient._preprocess_messages(messages)
+        # Convert custom types to google.genai.types
+        genai_messages = _convert_messages_to_genai(messages)
+        genai_tools = _convert_tools_to_genai(tools)
+        genai_tool_config = _convert_tool_config_to_genai(tool_config)
+        
         if max_tokens is None:
             max_tokens = self.default_max_tokens
         config = types.GenerateContentConfig(
             system_instruction=system_message,
             max_output_tokens=max_tokens,
-            tools=tools,
-            tool_config=tool_config,
+            tools=genai_tools,
+            tool_config=genai_tool_config,
         )
         if timeout is not None:
             config.http_options = types.HttpOptions(timeout=int(timeout * 1_000))
 
         if thinking_config is None:
             thinking_config = self.default_thinking_config
-        config.thinking_config = thinking_config
+        config.thinking_config = _convert_thinking_config_to_genai(thinking_config)
 
         if result_type is None:
             return await self.client.aio.models.generate_content(
                 model=self.model,
-                contents=messages,
+                contents=genai_messages,
                 config=config,
             )
         elif result_type == "json":
             config.response_mime_type = "application/json"
             return await self.client.aio.models.generate_content(
                 model=self.model,
-                contents=messages,
+                contents=genai_messages,
                 config=config,
             )
         elif isinstance(result_type, type(BaseModel)):
@@ -291,7 +459,7 @@ class GoogleLLMClientAsync(BaseLLMClientAsync):
             config.response_schema = result_type
             return await self.client.aio.models.generate_content(
                 model=self.model,
-                contents=messages,
+                contents=genai_messages,
                 config=config,
             )
         else:
@@ -306,6 +474,9 @@ class GoogleLLMClientAsync(BaseLLMClientAsync):
         system_message: str | None = None,
         max_tokens: int | None = None,
     ) -> AsyncIterator[Response]:
+        # Convert custom types to google.genai.types
+        genai_messages = _convert_messages_to_genai(messages)
+        
         if max_tokens is None:
             max_tokens = self.default_max_tokens
         config = types.GenerateContentConfig(
@@ -315,11 +486,11 @@ class GoogleLLMClientAsync(BaseLLMClientAsync):
         
         if thinking_config is None:
             thinking_config = self.default_thinking_config
-        config.thinking_config = thinking_config
+        config.thinking_config = _convert_thinking_config_to_genai(thinking_config)
         
         response = await self.client.aio.models.generate_content_stream(
             model=self.model,
-            contents=[msg.model_dump() for msg in  messages],
+            contents=genai_messages,
             config=config,
         )
         return response
