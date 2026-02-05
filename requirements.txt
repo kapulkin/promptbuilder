@@ -11,3 +11,4 @@ httpx
 aiohttp
 litellm
 tiktoken
+hjson

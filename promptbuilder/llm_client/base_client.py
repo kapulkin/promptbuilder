@@ -1,5 +1,6 @@
 import re
 import json
+import hjson
 import os
 import hashlib
 import logging
@@ -58,7 +59,15 @@ class BaseLLMClient(ABC, utils.InheritDecoratorsMixin):
         return self.provider + ":" + self.model
     
     @staticmethod
-    def as_json(text: str, raise_on_error: bool = True) -> Json:
+    @overload
+    def as_json(text: str, raise_on_error: Literal[True]) -> Json: ...
+
+    @staticmethod
+    @overload
+    def as_json(text: str, raise_on_error: Literal[False]) -> Json | None: ...
+    
+    @staticmethod
+    def as_json(text: str, raise_on_error: bool = True) -> Json | None:
         # Remove markdown code block formatting if present
         text = text.strip()
                 
@@ -70,8 +79,8 @@ class BaseLLMClient(ABC, utils.InheritDecoratorsMixin):
             text = match.group(1).strip()
 
         try:
-            return json.loads(text, strict=False)
-        except json.JSONDecodeError as e:
+            return hjson.loads(text, strict=False)
+        except hjson.HjsonDecodeError as e:
             if raise_on_error:
                 raise ValueError(f"Failed to parse LLM response as JSON:\n{text}")
             return None
