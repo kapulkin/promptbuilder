@@ -310,7 +310,7 @@ class TestConversionFunctions:
         fcc = FunctionCallingConfig(mode=FunctionCallingConfigMode.ANY, allowed_function_names=["allowed_func"])
         result = _convert_function_calling_config_to_genai(fcc)
         assert isinstance(result, genai_types.FunctionCallingConfig)
-        assert result.mode == FunctionCallingConfigMode.ANY
+        assert result.mode.value == FunctionCallingConfigMode.ANY.value
         assert result.allowed_function_names == ["allowed_func"]
     
     def test_convert_tool_config_none(self):
@@ -323,7 +323,15 @@ class TestConversionFunctions:
         result = _convert_tool_config_to_genai(tc)
         assert isinstance(result, genai_types.ToolConfig)
         assert isinstance(result.function_calling_config, genai_types.FunctionCallingConfig)
-        assert result.function_calling_config.mode == FunctionCallingConfigMode.NONE
+        assert result.function_calling_config.mode.value == FunctionCallingConfigMode.NONE.value
+
+    def test_convert_tool_config_mode_is_json_serializable(self):
+        tc = ToolConfig(
+            function_calling_config=FunctionCallingConfig(mode=FunctionCallingConfigMode.NONE)
+        )
+        result = _convert_tool_config_to_genai(tc)
+        dumped = result.model_dump(mode="json")
+        assert dumped["function_calling_config"]["mode"] == "NONE"
 
 
 class TestDictFieldsExactMatch:

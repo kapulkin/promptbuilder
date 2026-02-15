@@ -159,7 +159,10 @@ def _convert_function_calling_config_to_genai(fcc: FunctionCallingConfig | None)
     """Convert custom FunctionCallingConfig to google.genai.types.FunctionCallingConfig"""
     if fcc is None:
         return None
-    return types.FunctionCallingConfig.model_construct(**fcc.__dict__)
+    return types.FunctionCallingConfig(
+        mode=types.FunctionCallingConfigMode(fcc.mode.value) if fcc.mode is not None else None,
+        allowed_function_names=fcc.allowed_function_names,
+    )
 
 
 def _convert_tool_config_to_genai(tool_config: ToolConfig | None) -> types.ToolConfig | None:
