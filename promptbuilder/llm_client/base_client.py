@@ -60,18 +60,19 @@ class BaseLLMClient(ABC, utils.InheritDecoratorsMixin):
     
     @staticmethod
     @overload
-    def as_json(text: str, raise_on_error: Literal[True]) -> Json: ...
+    def as_json(text: str, raise_on_error: Literal[True], as_hjson: bool = False) -> Json: ...
 
     @staticmethod
     @overload
-    def as_json(text: str, raise_on_error: Literal[False]) -> Json | None: ...
+    def as_json(text: str, raise_on_error: Literal[False], as_hjson: bool = False) -> Json | None: ...
     
     @staticmethod
-    def as_json(text: str, raise_on_error: bool = True) -> Json | None:
+    def as_json(text: str, raise_on_error: bool = True, as_hjson: bool = False) -> Json | None:
         # Remove markdown code block formatting if present
         text = text.strip()
                 
-        code_block_pattern = r"```(?:json\s)?(.*)```"
+        # Match the outermost fenced block so inner ``` in JSON strings are preserved.
+        code_block_pattern = r"```(?:json)?\s*(.*)```(?=\s*$)"
         match = re.search(code_block_pattern, text, re.DOTALL)
         
         if match:
@@ -79,10 +80,13 @@ class BaseLLMClient(ABC, utils.InheritDecoratorsMixin):
             text = match.group(1).strip()
 
         try:
-            return hjson.loads(text, strict=False)
-        except hjson.HjsonDecodeError as e:
+            if as_hjson:
+                return hjson.loads(text, strict=False)
+            else:
+                return json.loads(text)
+        except (hjson.HjsonDecodeError, json.JSONDecodeError) as e:
             if raise_on_error:
-                raise ValueError(f"Failed to parse LLM response as JSON:\n{text}")
+                raise ValueError(f"Failed to parse LLM response as JSON:\n{text}") from e
             return None
 
     def create(

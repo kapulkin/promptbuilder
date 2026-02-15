@@ -16,6 +16,7 @@ from promptbuilder.llm_client.types import (
     FunctionDeclaration,
     Tool,
     FunctionCallingConfig,
+    FunctionCallingConfigMode,
     ToolConfig,
 )
 from promptbuilder.llm_client.google_client import (
@@ -92,11 +93,11 @@ class TestFieldCompatibility:
     
     def test_function_calling_config_fields_match(self):
         """FunctionCallingConfig __dict__ should have fields compatible with genai_types.FunctionCallingConfig"""
-        fcc = FunctionCallingConfig(mode="AUTO", allowed_function_names=["func1", "func2"])
+        fcc = FunctionCallingConfig(mode=FunctionCallingConfigMode.AUTO, allowed_function_names=["func1", "func2"])
         
         result = _convert_function_calling_config_to_genai(fcc)
         assert isinstance(result, genai_types.FunctionCallingConfig)
-        assert result.mode == "AUTO"
+        assert result.mode == FunctionCallingConfigMode.AUTO
         assert result.allowed_function_names == ["func1", "func2"]
 
 
@@ -306,10 +307,10 @@ class TestConversionFunctions:
         assert _convert_function_calling_config_to_genai(None) is None
     
     def test_convert_function_calling_config_with_data(self):
-        fcc = FunctionCallingConfig(mode="ANY", allowed_function_names=["allowed_func"])
+        fcc = FunctionCallingConfig(mode=FunctionCallingConfigMode.ANY, allowed_function_names=["allowed_func"])
         result = _convert_function_calling_config_to_genai(fcc)
         assert isinstance(result, genai_types.FunctionCallingConfig)
-        assert result.mode == "ANY"
+        assert result.mode == FunctionCallingConfigMode.ANY
         assert result.allowed_function_names == ["allowed_func"]
     
     def test_convert_tool_config_none(self):
@@ -317,12 +318,12 @@ class TestConversionFunctions:
     
     def test_convert_tool_config_with_data(self):
         tc = ToolConfig(
-            function_calling_config=FunctionCallingConfig(mode="NONE")
+            function_calling_config=FunctionCallingConfig(mode=FunctionCallingConfigMode.NONE)
         )
         result = _convert_tool_config_to_genai(tc)
         assert isinstance(result, genai_types.ToolConfig)
         assert isinstance(result.function_calling_config, genai_types.FunctionCallingConfig)
-        assert result.function_calling_config.mode == "NONE"
+        assert result.function_calling_config.mode == FunctionCallingConfigMode.NONE
 
 
 class TestDictFieldsExactMatch:
@@ -420,7 +421,7 @@ class TestModelConstructCompatibility:
     
     def test_function_calling_config_model_construct_works(self):
         """genai_types.FunctionCallingConfig.model_construct should work with FunctionCallingConfig.__dict__"""
-        fcc = FunctionCallingConfig(mode="AUTO", allowed_function_names=["f1", "f2"])
+        fcc = FunctionCallingConfig(mode=FunctionCallingConfigMode.AUTO, allowed_function_names=["f1", "f2"])
         result = genai_types.FunctionCallingConfig.model_construct(**fcc.__dict__)
-        assert result.mode == "AUTO"
+        assert result.mode == FunctionCallingConfigMode.AUTO
         assert result.allowed_function_names == ["f1", "f2"]
