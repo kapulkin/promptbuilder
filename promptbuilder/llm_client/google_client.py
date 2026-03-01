@@ -256,6 +256,7 @@ class GoogleLLMClient(BaseLLMClient):
         timeout: float | None = None,
         tools: list[Tool] | None = None,
         tool_config: ToolConfig = ToolConfig(),
+        without_cache: bool = False
     ) -> Response:
         messages = self._preprocess_messages(messages)
         # Convert custom types to google.genai.types
@@ -313,6 +314,7 @@ class GoogleLLMClient(BaseLLMClient):
         thinking_config: ThinkingConfig | None = None,
         system_message: str | None = None,
         max_tokens: int | None = None,
+        without_cache: bool = False
     ) -> Iterator[Response]:
         # Convert custom types to google.genai.types
         genai_messages = _convert_messages_to_genai(messages)
@@ -422,6 +424,7 @@ class GoogleLLMClientAsync(BaseLLMClientAsync):
         timeout: float | None = None,
         tools: list[Tool] | None = None,
         tool_config: ToolConfig = ToolConfig(),
+        without_cache: bool = False
     ) -> Response:
         messages = GoogleLLMClient._preprocess_messages(messages)
         # Convert custom types to google.genai.types
@@ -476,6 +479,7 @@ class GoogleLLMClientAsync(BaseLLMClientAsync):
         thinking_config: ThinkingConfig | None = None,
         system_message: str | None = None,
         max_tokens: int | None = None,
+        without_cache: bool = False
     ) -> AsyncIterator[Response]:
         # Convert custom types to google.genai.types
         genai_messages = _convert_messages_to_genai(messages)

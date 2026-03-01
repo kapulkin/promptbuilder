@@ -114,6 +114,7 @@ class BedrockLLMClient(BaseLLMClient):
         timeout: float | None = None,
         tools: list[Tool] | None = None,
         tool_config: ToolConfig = ToolConfig(),
+        without_cache: bool = False
     ) -> Response:
         bedrock_kwargs : dict[str, Any] = {
             "modelId": self.model,
@@ -273,6 +274,7 @@ class BedrockLLMClient(BaseLLMClient):
         thinking_config: ThinkingConfig | None = None,
         system_message: str | None = None,
         max_tokens: int | None = None,
+        without_cache: bool = False
     ) -> Iterator[Response]:
         bedrock_kwargs : dict[str, Any] = {
             "modelId": self.model,
@@ -414,6 +416,7 @@ class BedrockLLMClientAsync(BaseLLMClientAsync):
         timeout: float | None = None,
         tools: list[Tool] | None = None,
         tool_config: ToolConfig = ToolConfig(),
+        without_cache: bool = False
     ) -> Response:
         bedrock_kwargs : dict[str, Any] = {
             "modelId": self.model,
@@ -567,6 +570,7 @@ class BedrockLLMClientAsync(BaseLLMClientAsync):
         thinking_config: ThinkingConfig | None = None,
         system_message: str | None = None,
         max_tokens: int | None = None,
+        without_cache: bool = False
     ) -> AsyncIterator[Response]:
         bedrock_kwargs : dict[str, Any] = {
             "modelId": self.model,

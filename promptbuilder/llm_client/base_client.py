@@ -100,7 +100,8 @@ class BaseLLMClient(ABC, utils.InheritDecoratorsMixin):
         timeout: float | None = None,
         tools: list[Tool] | None = None,
         tool_config: ToolConfig = ToolConfig(),
-        autocomplete: bool = False
+        autocomplete: bool = False,
+        without_cache: bool = False
     ) -> Response:
         if autocomplete and (result_type == "tools" or isinstance(result_type, type)):
             raise ValueError("autocompletion is not supported with 'tools' or pydantic model result_type")
@@ -117,6 +118,7 @@ class BaseLLMClient(ABC, utils.InheritDecoratorsMixin):
             timeout=timeout,
             tools=tools,
             tool_config=tool_config,
+            without_cache=without_cache,
         )
 
         total_count = BaseLLMClient._response_out_tokens(response)
@@ -162,6 +164,7 @@ class BaseLLMClient(ABC, utils.InheritDecoratorsMixin):
         timeout: float | None = None,
         tools: list[Tool] | None = None,
         tool_config: ToolConfig = ToolConfig(),
+        without_cache: bool = False
     ) -> Response:
         pass
 
@@ -178,6 +181,7 @@ class BaseLLMClient(ABC, utils.InheritDecoratorsMixin):
         tools: None = None,
         tool_choice_mode: Literal["NONE"] = "NONE",
         autocomplete: bool = False,
+        without_cache: bool = False
     ) -> str: ...
     @overload
     def create_value(
@@ -192,6 +196,7 @@ class BaseLLMClient(ABC, utils.InheritDecoratorsMixin):
         tools: None = None,
         tool_choice_mode: Literal["NONE"] = "NONE",
         autocomplete: bool = False,
+        without_cache: bool = False
     ) -> Json: ...
     @overload
     def create_value(
@@ -206,6 +211,7 @@ class BaseLLMClient(ABC, utils.InheritDecoratorsMixin):
         tools: None = None,
         tool_choice_mode: Literal["NONE"] = "NONE",
         autocomplete: bool = False,
+        without_cache: bool = False
     ) -> PydanticStructure: ...
     @overload
     def create_value(
@@ -220,6 +226,7 @@ class BaseLLMClient(ABC, utils.InheritDecoratorsMixin):
         tools: list[Tool],
         tool_choice_mode: Literal["ANY"],
         autocomplete: bool = False,
+        without_cache: bool = False
     ) -> list[FunctionCall]: ...
 
     def create_value(
@@ -235,6 +242,7 @@ class BaseLLMClient(ABC, utils.InheritDecoratorsMixin):
         tool_choice_mode: Literal["ANY", "NONE"] = "NONE",
         autocomplete: bool = False,
         raise_on_json_error: bool = True,
+        without_cache: bool = False
     ):
         if result_type == "tools":
             response = self.create(
@@ -246,6 +254,7 @@ class BaseLLMClient(ABC, utils.InheritDecoratorsMixin):
                 timeout=timeout,
                 tools=tools,
                 tool_config=ToolConfig(function_calling_config=FunctionCallingConfig(mode=tool_choice_mode)),
+                without_cache=without_cache,
             )
             functions: list[FunctionCall] = []
             for candidate in response.candidates:
@@ -264,6 +273,7 @@ class BaseLLMClient(ABC, utils.InheritDecoratorsMixin):
             tools=tools,
             tool_config=ToolConfig(function_calling_config=FunctionCallingConfig(mode=tool_choice_mode)),
             autocomplete=autocomplete,
+            without_cache=without_cache,
         )
 
         if result_type is None:
@@ -338,6 +348,7 @@ class BaseLLMClient(ABC, utils.InheritDecoratorsMixin):
         thinking_config: ThinkingConfig | None = None,
         system_message: str | None = None,
         max_tokens: int | None = None,
+        without_cache: bool = False
     ) -> Iterator[Response]:
         raise NotImplementedError
     
@@ -349,6 +360,7 @@ class BaseLLMClient(ABC, utils.InheritDecoratorsMixin):
         system_message: str | None = None,
         max_tokens: int | None = None,
         autocomplete: bool = False,
+        without_cache: bool = False
     ) -> Iterator[Response]:
         if max_tokens is None:
             max_tokens = self.default_max_tokens
@@ -368,6 +380,7 @@ class BaseLLMClient(ABC, utils.InheritDecoratorsMixin):
                         thinking_config=thinking_config,
                         system_message=system_message,
                         max_tokens=max_tokens if not autocomplete else None,
+                        without_cache=without_cache,
                     )
                     for response in iter:
                         yield response
@@ -407,6 +420,7 @@ class BaseLLMClient(ABC, utils.InheritDecoratorsMixin):
         tools: None = None,
         tool_choice_mode: Literal["NONE"] = "NONE",
         autocomplete: bool = False,
+        without_cache: bool = False
     ) -> str: ...
     @overload
     def from_text(
@@ -420,6 +434,7 @@ class BaseLLMClient(ABC, utils.InheritDecoratorsMixin):
         tools: None = None,
         tool_choice_mode: Literal["NONE"] = "NONE",
         autocomplete: bool = False,
+        without_cache: bool = False
     ) -> Json: ...
     @overload
     def from_text(
@@ -433,6 +448,7 @@ class BaseLLMClient(ABC, utils.InheritDecoratorsMixin):
         tools: None = None,
         tool_choice_mode: Literal["NONE"] = "NONE",
         autocomplete: bool = False,
+        without_cache: bool = False
     ) -> PydanticStructure: ...
     @overload
     def from_text(
@@ -446,6 +462,7 @@ class BaseLLMClient(ABC, utils.InheritDecoratorsMixin):
         tools: list[Tool],
         tool_choice_mode: Literal["ANY"],
         autocomplete: bool = False,
+        without_cache: bool = False
     ) -> list[FunctionCall]: ...
     
     def from_text(
@@ -459,6 +476,7 @@ class BaseLLMClient(ABC, utils.InheritDecoratorsMixin):
         tools: list[Tool] | None = None,
         tool_choice_mode: Literal["ANY", "NONE"] = "NONE",
         autocomplete: bool = False,
+        without_cache: bool = False
     ):
         return self.create_value(
             messages=[Content(parts=[Part(text=prompt)], role="user")],
@@ -469,6 +487,7 @@ class BaseLLMClient(ABC, utils.InheritDecoratorsMixin):
             tools=tools,
             tool_choice_mode=tool_choice_mode,
             autocomplete=autocomplete,
+            without_cache=without_cache,
         )
 
 
@@ -526,6 +545,7 @@ class BaseLLMClientAsync(ABC, utils.InheritDecoratorsMixin):
         tools: list[Tool] | None = None,
         tool_config: ToolConfig = ToolConfig(),
         autocomplete: bool = False,
+        without_cache: bool = False
     ) -> Response:
         if autocomplete and (result_type == "tools" or isinstance(result_type, type)):
             raise ValueError("autocompletion is not supported with 'tools' or pydantic model result_type")
@@ -542,6 +562,7 @@ class BaseLLMClientAsync(ABC, utils.InheritDecoratorsMixin):
             timeout=timeout,
             tools=tools,
             tool_config=tool_config,
+            without_cache=without_cache,
         )
 
         total_count = BaseLLMClient._response_out_tokens(response)
@@ -560,6 +581,7 @@ class BaseLLMClientAsync(ABC, utils.InheritDecoratorsMixin):
                     timeout=timeout,
                     tools=tools,
                     tool_config=tool_config,
+                    without_cache=without_cache,
                 )
                 finish_reason = response.candidates[0].finish_reason.value if response.candidates and response.candidates[0].finish_reason else None
                 total_count += BaseLLMClient._response_out_tokens(response)
@@ -587,6 +609,7 @@ class BaseLLMClientAsync(ABC, utils.InheritDecoratorsMixin):
         timeout: float | None = None,
         tools: list[Tool] | None = None,
         tool_config: ToolConfig = ToolConfig(),
+        without_cache: bool = False,
     ) -> Response:
         pass
 
@@ -603,6 +626,7 @@ class BaseLLMClientAsync(ABC, utils.InheritDecoratorsMixin):
         tools: None = None,
         tool_choice_mode: Literal["NONE"] = "NONE",
         autocomplete: bool = False,
+        without_cache: bool = False,
     ) -> str: ...
     @overload
     async def create_value(
@@ -618,6 +642,7 @@ class BaseLLMClientAsync(ABC, utils.InheritDecoratorsMixin):
         tool_choice_mode: Literal["NONE"] = "NONE",
         autocomplete: bool = False,
         raise_on_json_error: bool = True,
+        without_cache: bool = False,
     ) -> Json: ...
     @overload
     async def create_value(
@@ -632,6 +657,7 @@ class BaseLLMClientAsync(ABC, utils.InheritDecoratorsMixin):
         tools: None = None,
         tool_choice_mode: Literal["NONE"] = "NONE",
         autocomplete: bool = False,
+        without_cache: bool = False,
     ) -> PydanticStructure: ...
     @overload
     async def create_value(
@@ -646,6 +672,7 @@ class BaseLLMClientAsync(ABC, utils.InheritDecoratorsMixin):
         tools: list[Tool],
         tool_choice_mode: Literal["ANY"],
         autocomplete: bool = False,
+        without_cache: bool = False,
     ) -> list[FunctionCall]: ...
 
     async def create_value(
@@ -661,6 +688,7 @@ class BaseLLMClientAsync(ABC, utils.InheritDecoratorsMixin):
         tool_choice_mode: Literal["ANY", "NONE"] = "NONE",
         autocomplete: bool = False,
         raise_on_json_error: bool = True,
+        without_cache: bool = False,
     ):
         if result_type == "tools":
             response = await self._create(
@@ -689,7 +717,8 @@ class BaseLLMClientAsync(ABC, utils.InheritDecoratorsMixin):
             timeout=timeout,
             tools=tools,
             tool_config=ToolConfig(function_calling_config=FunctionCallingConfig(mode=tool_choice_mode)),
-            autocomplete=autocomplete
+            autocomplete=autocomplete,
+            without_cache=without_cache
         )
         if result_type is None:
             return response.text
@@ -712,6 +741,7 @@ class BaseLLMClientAsync(ABC, utils.InheritDecoratorsMixin):
         thinking_config: ThinkingConfig | None = None,
         system_message: str | None = None,
         max_tokens: int | None = None,
+        without_cache: bool = False,
     ) -> AsyncIterator[Response]:
         raise NotImplementedError
     
@@ -723,6 +753,7 @@ class BaseLLMClientAsync(ABC, utils.InheritDecoratorsMixin):
         system_message: str | None = None,
         max_tokens: int | None = None,
         autocomplete: bool = False,
+        without_cache: bool = False,
     ) -> AsyncIterator[Response]:          
         if max_tokens is None:
             max_tokens = self.default_max_tokens
@@ -740,6 +771,7 @@ class BaseLLMClientAsync(ABC, utils.InheritDecoratorsMixin):
                         thinking_config=thinking_config,
                         system_message=system_message,
                         max_tokens=max_tokens if not autocomplete else None,
+                        without_cache=without_cache,
                     )
 
                     async for response in iter:
@@ -779,6 +811,7 @@ class BaseLLMClientAsync(ABC, utils.InheritDecoratorsMixin):
         tools: None = None,
         tool_choice_mode: Literal["NONE"] = "NONE",
         autocomplete: bool = False,
+        without_cache: bool = False,
     ) -> str: ...
     @overload
     async def from_text(
@@ -792,6 +825,7 @@ class BaseLLMClientAsync(ABC, utils.InheritDecoratorsMixin):
         tools: None = None,
         tool_choice_mode: Literal["NONE"] = "NONE",
         autocomplete: bool = False,
+        without_cache: bool = False,
     ) -> Json: ...
     @overload
     async def from_text(
@@ -805,6 +839,7 @@ class BaseLLMClientAsync(ABC, utils.InheritDecoratorsMixin):
         tools: None = None,
         tool_choice_mode: Literal["NONE"] = "NONE",
         autocomplete: bool = False,
+        without_cache: bool = False,
     ) -> PydanticStructure: ...
     @overload
     async def from_text(
@@ -818,6 +853,7 @@ class BaseLLMClientAsync(ABC, utils.InheritDecoratorsMixin):
         tools: list[Tool],
         tool_choice_mode: Literal["ANY"],
         autocomplete: bool = False,
+        without_cache: bool = False,
     ) -> list[FunctionCall]: ...
     
     async def from_text(
@@ -831,6 +867,7 @@ class BaseLLMClientAsync(ABC, utils.InheritDecoratorsMixin):
         tools: list[Tool] | None = None,
         tool_choice_mode: Literal["ANY", "NONE"] = "NONE",
         autocomplete: bool = False,
+        without_cache: bool = False,
     ):
         return await self.create_value(
             messages=[Content(parts=[Part(text=prompt)], role="user")],
@@ -841,6 +878,7 @@ class BaseLLMClientAsync(ABC, utils.InheritDecoratorsMixin):
             tools=tools,
             tool_choice_mode=tool_choice_mode,
             autocomplete=autocomplete,
+            without_cache=without_cache,
         )
 
 
@@ -861,9 +899,9 @@ class CachedLLMClient(BaseLLMClient):
         self.llm_client = llm_client
         self.cache_dir = cache_dir
     
-    def _create(self, messages: list[Content], system_message: str | None = None, **kwargs) -> Response:
+    def _create(self, messages: list[Content], system_message: str | None = None, without_cache: bool = False, **kwargs) -> Response:
         response, messages_dump, cache_path = CachedLLMClient.create_cached(self.llm_client, self.cache_dir, messages, system_message, **kwargs)
-        if response is not None:
+        if not without_cache and response is not None:
             return response
         response = self.llm_client.create(messages, system_message=system_message, **kwargs)
         CachedLLMClient.save_cache(cache_path, self.llm_client.full_model_name, messages_dump, response)
@@ -877,6 +915,7 @@ class CachedLLMClient(BaseLLMClient):
         thinking_config: ThinkingConfig | None = None,
         system_message: str | None = None,
         max_tokens: int | None = None,
+        without_cache: bool = False
     ) -> Iterator[Response]:
         response, messages_dump, cache_path = CachedLLMClient.create_cached(
             self.llm_client, self.cache_dir, messages,
@@ -884,7 +923,7 @@ class CachedLLMClient(BaseLLMClient):
             system_message=system_message,
             max_tokens=max_tokens,
         )
-        if response is not None:
+        if not without_cache and response is not None:
             yield response
             return
         
@@ -957,9 +996,9 @@ class CachedLLMClientAsync(BaseLLMClientAsync):
         self.llm_client = llm_client
         self.cache_dir = cache_dir
 
-    async def _create(self, messages: list[Content], system_message: str | None = None, **kwargs) -> Response:
+    async def _create(self, messages: list[Content], system_message: str | None = None, without_cache: bool = False, **kwargs) -> Response:
         response, messages_dump, cache_path = CachedLLMClient.create_cached(self.llm_client, self.cache_dir, messages, system_message, **kwargs)
-        if response is not None:
+        if not without_cache and response is not None:
             return response        
         response = await self.llm_client.create(messages, system_message=system_message, **kwargs)
         CachedLLMClient.save_cache(cache_path, self.llm_client.full_model_name, messages_dump, response)
@@ -973,6 +1012,7 @@ class CachedLLMClientAsync(BaseLLMClientAsync):
         thinking_config: ThinkingConfig | None = None,
         system_message: str | None = None,
         max_tokens: int | None = None,
+        without_cache: bool = False
     ) -> AsyncIterator[Response]:
         response, messages_dump, cache_path = CachedLLMClient.create_cached(
             self.llm_client, self.cache_dir, messages,
@@ -980,7 +1020,7 @@ class CachedLLMClientAsync(BaseLLMClientAsync):
             system_message=system_message,
             max_tokens=max_tokens,
         )
-        if response is not None:
+        if not without_cache and response is not None:
             yield response
             return
         

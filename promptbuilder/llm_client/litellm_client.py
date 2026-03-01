@@ -142,6 +142,7 @@ class LiteLLMClient(BaseLLMClient):
         timeout: float | None = None,
         tools: list[Tool] | None = None,
         tool_config: ToolConfig = ToolConfig(),
+        without_cache: bool = False
     ) -> Response:
         litellm_messages: list[dict[str, str]] = []
         if system_message is not None:
@@ -320,6 +321,7 @@ class LiteLLMClient(BaseLLMClient):
         timeout: float | None = None,
         tools: list[Tool] | None = None,
         tool_config: ToolConfig = ToolConfig(),
+        without_cache: bool = False
     ):
         """Streaming variant: yields Response objects with partial text/function calls.
 
@@ -477,6 +479,7 @@ class LiteLLMClientAsync(BaseLLMClientAsync):
         timeout: float | None = None,
         tools: list[Tool] | None = None,
         tool_config: ToolConfig = ToolConfig(),
+        without_cache: bool = False
     ) -> Response:
         litellm_messages: list[dict[str, str]] = []
         if system_message is not None:
@@ -648,6 +651,7 @@ class LiteLLMClientAsync(BaseLLMClientAsync):
         timeout: float | None = None,
         tools: list[Tool] | None = None,
         tool_config: ToolConfig = ToolConfig(),
+        without_cache: bool = False
     ):
         """Async streaming variant mirroring sync version."""
         litellm_messages: list[dict[str, str]] = []

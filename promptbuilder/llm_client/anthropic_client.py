@@ -203,6 +203,7 @@ class AnthropicLLMClient(BaseLLMClient):
         timeout: float | None = None,
         tools: list[Tool] | None = None,
         tool_config: ToolConfig = ToolConfig(),
+        without_cache: bool = False
     ) -> Response:
         anthropic_messages = self.content_to_anthropic_messages(messages)
         if max_tokens is None:
@@ -320,6 +321,7 @@ class AnthropicLLMClient(BaseLLMClient):
         thinking_config: ThinkingConfig | None = None,
         system_message: str | None = None,
         max_tokens: int | None = None,
+        without_cache: bool = False
     ) -> Iterator[Response]:
         anthropic_messages = self.content_to_anthropic_messages(messages)
         
@@ -460,6 +462,7 @@ class AnthropicLLMClientAsync(BaseLLMClientAsync):
         timeout: float | None = None,
         tools: list[Tool] | None = None,
         tool_config: ToolConfig = ToolConfig(),
+        without_cache: bool = False
     ) -> Response:
         anthropic_messages: list[dict[str, str]] = []
         for message in messages:
@@ -583,6 +586,7 @@ class AnthropicLLMClientAsync(BaseLLMClientAsync):
         thinking_config: ThinkingConfig | None = None,
         system_message: str | None = None,
         max_tokens: int | None = None,
+        without_cache: bool = False
     ) -> AsyncIterator[Response]:
         anthropic_messages: list[dict[str, str]] = []
         for message in messages:

@@ -153,6 +153,7 @@ class OpenaiLLMClient(BaseLLMClient):
         timeout: float | None = None,
         tools: list[Tool] | None = None,
         tool_config: ToolConfig = ToolConfig(),
+        without_cache: bool = False
     ) -> Response:
         openai_messages: list[MessageDict] = OpenaiLLMClient._content_to_openai_messages(messages, system_message)
         
@@ -295,6 +296,7 @@ class OpenaiLLMClient(BaseLLMClient):
         thinking_config: ThinkingConfig | None = None,
         system_message: str | None = None,
         max_tokens: int | None = None,
+        without_cache: bool = False
     ) -> Iterator[Response]:
         openai_messages = OpenaiLLMClient._content_to_openai_messages(messages, system_message)
         
@@ -422,6 +424,7 @@ class OpenaiLLMClientAsync(BaseLLMClientAsync):
         timeout: float | None = None,
         tools: list[Tool] | None = None,
         tool_config: ToolConfig = ToolConfig(),
+        without_cache: bool = False
     ) -> Response:
         openai_messages = OpenaiLLMClient._content_to_openai_messages(messages, system_message)
         if system_message is not None:
@@ -567,6 +570,7 @@ class OpenaiLLMClientAsync(BaseLLMClientAsync):
         thinking_config: ThinkingConfig | None = None,
         system_message: str | None = None,
         max_tokens: int | None = None,
+        without_cache: bool = False
     ) -> AsyncIterator[Response]:
         openai_messages = OpenaiLLMClient._content_to_openai_messages(messages, system_message)
         if system_message is not None:
