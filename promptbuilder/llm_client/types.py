@@ -24,6 +24,7 @@ class PartLike(Protocol):
     function_call: Optional[Any]  # Using Any to allow different FunctionCall types
     function_response: Optional[Any]  # Using Any to allow different FunctionResponse types
     thought: Optional[bool]
+    thought_signature: Optional[bytes]
     inline_data: Optional[Any]  # Using Any to allow different Blob types
 
 
@@ -73,6 +74,7 @@ class Part(BaseModel):
     function_call: Optional[FunctionCall] = None
     function_response: Optional[FunctionResponse] = None
     thought: Optional[bool] = None
+    thought_signature: Optional[bytes] = None
     inline_data: Optional[Blob] = None
     
     def as_str(self) -> str:

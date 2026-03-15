@@ -71,6 +71,7 @@ def _convert_part_to_genai(part: Part | PartLike) -> types.Part:
         function_call=function_call,
         function_response=function_response,
         thought=part.thought,
+        thought_signature=part.thought_signature,
         inline_data=inline_data,
     )
 

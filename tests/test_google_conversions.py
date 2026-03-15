@@ -169,6 +169,26 @@ class TestConversionFunctions:
         assert isinstance(result, genai_types.Part)
         assert result.text == "thinking..."
         assert result.thought == True
+
+    def test_convert_part_with_thought_signature(self):
+        part = Part(
+            function_call=FunctionCall(name="calc", args={"x": 1}),
+            thought_signature=b"signature-bytes",
+        )
+        result = _convert_part_to_genai(part)
+        assert isinstance(result, genai_types.Part)
+        assert result.function_call is not None
+        assert result.thought_signature == b"signature-bytes"
+
+    def test_convert_genai_part_preserves_thought_signature(self):
+        part = genai_types.Part.model_construct(
+            function_call=genai_types.FunctionCall.model_construct(name="calc", args={"x": 1}),
+            thought_signature=b"signature-bytes",
+        )
+        result = _convert_part_to_genai(part)
+        assert isinstance(result, genai_types.Part)
+        assert result.function_call is not None
+        assert result.thought_signature == b"signature-bytes"
     
     def test_convert_content_simple(self):
         content = Content(role="user", parts=[Part(text="Hello")])
@@ -377,9 +397,9 @@ class TestDictFieldsExactMatch:
     
     def test_part_dict_fields(self):
         """Verify Part.__dict__ contains only expected fields"""
-        part = Part(text="hello", thought=True, function_call=None, function_response=None, inline_data=None)
+        part = Part(text="hello", thought=True, thought_signature=b"sig", function_call=None, function_response=None, inline_data=None)
         dict_keys = set(part.__dict__.keys())
-        expected_keys = {"text", "function_call", "function_response", "thought", "inline_data"}
+        expected_keys = {"text", "function_call", "function_response", "thought", "thought_signature", "inline_data"}
         assert dict_keys == expected_keys
     
     def test_content_dict_fields(self):
