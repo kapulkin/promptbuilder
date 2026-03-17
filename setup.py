@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name="promptbuilder",
-    version="0.4.28",
+    version="0.5.0",
     packages=find_packages(),
     install_requires=[
         "pydantic",
@@ -11,7 +11,11 @@ setup(
         "google-genai>=1.4.0",
         "anthropic",
         "openai",
-        "aioboto3"
+        "aioboto3",
+        "litellm",
+        "httpx",
+        "aiohttp",
+        "tiktoken"
     ],
     author="Kapulkin Stanislav",
     author_email="kapulkin@gmail.com",

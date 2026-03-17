@@ -85,7 +85,7 @@ async def main():
     for msg in messages:
         print(f"\nUser: {msg}")
         await agent(Content(parts=[Part(text=msg)], role="user"))
-        response = agent.context.dialog_history.last_messages()[-1].parts[0].text
+        response = agent.context.dialog_history.last_content_messages()[-1].parts[0].text
         print(f"Assistant: {response}")
 # %%
 if __name__ == "__main__":

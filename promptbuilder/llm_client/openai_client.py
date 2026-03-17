@@ -150,8 +150,10 @@ class OpenaiLLMClient(BaseLLMClient):
         thinking_config: ThinkingConfig | None = None,
         system_message: str | None = None,
         max_tokens: int | None = None,
+        timeout: float | None = None,
         tools: list[Tool] | None = None,
         tool_config: ToolConfig = ToolConfig(),
+        without_cache: bool = False
     ) -> Response:
         openai_messages: list[MessageDict] = OpenaiLLMClient._content_to_openai_messages(messages, system_message)
         
@@ -204,7 +206,10 @@ class OpenaiLLMClient(BaseLLMClient):
             elif tool_choice_mode == "ANY":
                 openai_kwargs["tool_choice"] = "required"
         
-        if result_type is None or result_type == "json":
+        if result_type is None:
+            # Forward timeout to OpenAI per-request if provided
+            if timeout is not None:
+                openai_kwargs["timeout"] = timeout
             response = self.client.responses.create(**openai_kwargs)
             
             parts: list[Part] = []
@@ -224,9 +229,39 @@ class OpenaiLLMClient(BaseLLMClient):
                     candidates_token_count=response.usage.output_tokens,
                     prompt_token_count=response.usage.input_tokens,
                     total_token_count=response.usage.total_tokens,
+                )
+            )
+        elif result_type == "json":
+            # Forward timeout to OpenAI per-request if provided
+            if timeout is not None:
+                openai_kwargs["timeout"] = timeout
+            response = self.client.responses.create(**openai_kwargs, text={ "format" : { "type": "json_object" } })
+            
+            response_text = ""
+            parts: list[Part] = []
+            for output_item in response.output:
+                if output_item.type == "message":
+                    for content in output_item.content:
+                        parts.append(Part(text=content.text))
+                        response_text += content.text
+                elif output_item.type == "reasoning":
+                    for summary in output_item.summary:
+                        parts.append(Part(text=summary.text, thought=True))
+                elif output_item.type == "function_call":
+                    parts.append(Part(function_call=FunctionCall(args=json.loads(output_item.arguments), name=output_item.name)))
+            
+            return Response(
+                candidates=[Candidate(content=Content(parts=parts, role="model"))],
+                usage_metadata=UsageMetadata(
+                    candidates_token_count=response.usage.output_tokens,
+                    prompt_token_count=response.usage.input_tokens,
+                    total_token_count=response.usage.total_tokens,
                 ),
+                parsed=BaseLLMClient.as_json(response_text)
             )
         elif isinstance(result_type, type(BaseModel)):
+            if timeout is not None:
+                openai_kwargs["timeout"] = timeout
             response = self.client.responses.parse(**openai_kwargs, text_format=result_type)
             
             parts: list[Part] = []
@@ -254,13 +289,14 @@ class OpenaiLLMClient(BaseLLMClient):
             raise ValueError(f"Unsupported result type: {result_type}. Supported types are None, 'json', or a Pydantic model class.")
     
     @_error_handler
-    def create_stream(
+    def _create_stream(
         self,
         messages: list[Content],
         *,
         thinking_config: ThinkingConfig | None = None,
         system_message: str | None = None,
         max_tokens: int | None = None,
+        without_cache: bool = False
     ) -> Iterator[Response]:
         openai_messages = OpenaiLLMClient._content_to_openai_messages(messages, system_message)
         
@@ -385,8 +421,10 @@ class OpenaiLLMClientAsync(BaseLLMClientAsync):
         thinking_config: ThinkingConfig | None = None,
         system_message: str | None = None,
         max_tokens: int | None = None,
+        timeout: float | None = None,
         tools: list[Tool] | None = None,
         tool_config: ToolConfig = ToolConfig(),
+        without_cache: bool = False
     ) -> Response:
         openai_messages = OpenaiLLMClient._content_to_openai_messages(messages, system_message)
         if system_message is not None:
@@ -446,9 +484,10 @@ class OpenaiLLMClientAsync(BaseLLMClientAsync):
             elif tool_choice_mode == "ANY":
                 openai_kwargs["tool_choice"] = "required"
         
-        if result_type is None or result_type == "json":
+        if result_type is None:
+            if timeout is not None:
+                openai_kwargs["timeout"] = timeout
             response = await self.client.responses.create(**openai_kwargs)
-            
             parts: list[Part] = []
             for output_item in response.output:
                 if output_item.type == "message":
@@ -468,7 +507,35 @@ class OpenaiLLMClientAsync(BaseLLMClientAsync):
                     total_token_count=response.usage.total_tokens,
                 ),
             )
+        elif result_type == "json":
+            if timeout is not None:
+                openai_kwargs["timeout"] = timeout
+            response = await self.client.responses.create(**openai_kwargs, text={ "format" : { "type": "json_object" } })
+            parts: list[Part] = []
+            response_text = ""
+            for output_item in response.output:
+                if output_item.type == "message":
+                    for content in output_item.content:
+                        parts.append(Part(text=content.text))
+                        response_text += content.text
+                elif output_item.type == "reasoning":
+                    for summary in output_item.summary:
+                        parts.append(Part(text=summary.text, thought=True))
+                elif output_item.type == "function_call":
+                    parts.append(Part(function_call=FunctionCall(args=json.loads(output_item.arguments), name=output_item.name)))
+            
+            return Response(
+                candidates=[Candidate(content=Content(parts=parts, role="model"))],
+                usage_metadata=UsageMetadata(
+                    candidates_token_count=response.usage.output_tokens,
+                    prompt_token_count=response.usage.input_tokens,
+                    total_token_count=response.usage.total_tokens,
+                ),
+                parsed=BaseLLMClient.as_json(response_text)
+            )
         elif isinstance(result_type, type(BaseModel)):
+            if timeout is not None:
+                openai_kwargs["timeout"] = timeout
             response = await self.client.responses.parse(**openai_kwargs, text_format=result_type)
             
             parts: list[Part] = []
@@ -496,13 +563,14 @@ class OpenaiLLMClientAsync(BaseLLMClientAsync):
             raise ValueError(f"Unsupported result_type: {result_type}. Supported types are: None, 'json', or a Pydantic model.")
     
     @_error_handler_async
-    async def create_stream(
+    async def _create_stream(
         self,
         messages: list[Content],
         *,
         thinking_config: ThinkingConfig | None = None,
         system_message: str | None = None,
         max_tokens: int | None = None,
+        without_cache: bool = False
     ) -> AsyncIterator[Response]:
         openai_messages = OpenaiLLMClient._content_to_openai_messages(messages, system_message)
         if system_message is not None:

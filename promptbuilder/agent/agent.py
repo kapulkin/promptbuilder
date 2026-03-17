@@ -49,7 +49,7 @@ class Agent(Generic[MessageType, ContextType]):
             return messages
 
     async def _answer_with_llm(self, **kwargs: Any) -> Response:
-        messages = self._formatted_messages(self.context.dialog_history.last_messages())
+        messages = self._formatted_messages(self.context.dialog_history.last_content_messages())
         return await run_async(self.llm_client.create,
             messages=messages,
             system_message=self.system_message(**kwargs),
@@ -73,7 +73,7 @@ class AgentRouter(Agent[MessageType, ContextType]):
         callable_trs = [self.tools.get(name) or self.routes.get(name) for name in self.tr_names if name not in trs_to_exclude]
         trs = [callable_tr.tool for callable_tr in callable_trs]
 
-        messages = self._formatted_messages(self.context.dialog_history.last_messages())
+        messages = self._formatted_messages(self.context.dialog_history.last_content_messages())
         response = await run_async(self.llm_client.create,
             messages=messages,
             system_message=self.system_message(callable_trs=callable_trs),
@@ -82,21 +82,24 @@ class AgentRouter(Agent[MessageType, ContextType]):
         )
         content = response.candidates[0].content
         
+        router_tool_contents = []
         for part in content.parts:
             if part.function_call is None:
                 if part.text is not None:
-                    self.context.dialog_history.add_message(Content(parts=[Part(text=part.text, thought=part.thought)], role="model"))
+                    router_tool_contents.append(Content(parts=[Part(text=part.text)], role="model"))
             else:
                 tr_name = part.function_call.name
-                args = part.function_call.args
-                if args is None:
-                    args = {}
+                tr_args = part.function_call.args
+                if tr_args is None:
+                    tr_args = {}
 
                 route = self.routes.get(tr_name)
                 if route is not None:
+                    router_tool_contents = []
+
                     self.last_used_tr_name = tr_name
-                    logger.debug("Route %s called with args: %s", tr_name, args)
-                    merged_args = {**kwargs, **args}
+                    logger.debug("Route %s called with args: %s", tr_name, tr_args)
+                    merged_args = {**kwargs, **tr_args}
                     result = await route(**merged_args)
                     logger.debug("Route %s result: %s", tr_name, result)
                     trs_to_exclude = trs_to_exclude | {tr_name}
@@ -108,9 +111,14 @@ class AgentRouter(Agent[MessageType, ContextType]):
                 tool = self.tools.get(tr_name)
                 if tool is not None:
                     self.last_used_tr_name = tr_name
+
+                    for rtc in router_tool_contents:
+                        self.context.dialog_history.add_message(rtc)
+                    router_tool_contents = []
+
                     self.context.dialog_history.add_message(content)
-                    logger.debug("Tool %s called with args: %s", tr_name, args)
-                    tool_response = await tool(**args)
+                    logger.debug("Tool %s called with args: %s", tr_name, tr_args)
+                    tool_response = await tool(**tr_args)
                     logger.debug("Tool %s response: %s", tr_name, tool_response)
                     self.context.dialog_history.add_message(tool_response.candidates[0].content)
                     trs_to_exclude = trs_to_exclude | {tr_name}

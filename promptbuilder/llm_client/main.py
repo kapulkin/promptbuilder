@@ -10,6 +10,7 @@ from promptbuilder.llm_client.anthropic_client import AnthropicLLMClient, Anthro
 from promptbuilder.llm_client.openai_client import OpenaiLLMClient, OpenaiLLMClientAsync
 from promptbuilder.llm_client.bedrock_client import BedrockLLMClient, BedrockLLMClientAsync
 from promptbuilder.llm_client.aisuite_client import AiSuiteLLMClient, AiSuiteLLMClientAsync
+from promptbuilder.llm_client.litellm_client import LiteLLMClient, LiteLLMClientAsync
 
 
 
@@ -23,14 +24,17 @@ def get_client(
     decorator_configs: DecoratorConfigs | None = None,
     default_thinking_config: ThinkingConfig | None = None,
     default_max_tokens: int | None = None,
+    **kwargs,
 ) -> BaseLLMClient:
     global _memory
     
-    kwargs = {
+    explicit_kwargs = {
         "decorator_configs": decorator_configs,
         "default_thinking_config": default_thinking_config,
         "default_max_tokens": default_max_tokens,
     }
+    # Merge explicit kwargs with additional kwargs, with explicit taking precedence
+    merged_kwargs = {**kwargs, **explicit_kwargs}
     provider_to_client_class: dict[str, type[BaseLLMClient]] = {
         "google": GoogleLLMClient,
         "anthropic": AnthropicLLMClient,
@@ -40,12 +44,9 @@ def get_client(
     provider, model = full_model_name.split(":", 1)
     if provider in provider_to_client_class:
         client_class = provider_to_client_class[provider]
-        client = client_class(model, api_key, **kwargs)
+        client = client_class(model, api_key, **merged_kwargs)
     else:
-        if api_key is None:
-            raise ValueError(f"You should directly provide api_key for this provider: {provider}")
-        else:
-            client = AiSuiteLLMClient(full_model_name, api_key, **kwargs)
+        client = LiteLLMClient(full_model_name, api_key, **merged_kwargs)
     
     if (full_model_name, client.api_key) in _memory:
         client = _memory[(full_model_name, client.api_key)]
@@ -67,14 +68,17 @@ def get_async_client(
     decorator_configs: DecoratorConfigs | None = None,
     default_thinking_config: ThinkingConfig | None = None,
     default_max_tokens: int | None = None,
+    **kwargs,
 ) -> BaseLLMClientAsync:
     global _memory_async
     
-    kwargs = {
+    explicit_kwargs = {
         "decorator_configs": decorator_configs,
         "default_thinking_config": default_thinking_config,
         "default_max_tokens": default_max_tokens,
     }
+    # Merge explicit kwargs with additional kwargs, with explicit taking precedence
+    merged_kwargs = {**kwargs, **explicit_kwargs}
     provider_to_client_class: dict[str, type[BaseLLMClientAsync]] = {
         "google": GoogleLLMClientAsync,
         "anthropic": AnthropicLLMClientAsync,
@@ -84,12 +88,9 @@ def get_async_client(
     provider, model = full_model_name.split(":", 1)
     if provider in provider_to_client_class:
         client_class = provider_to_client_class[provider]
-        client = client_class(model, api_key, **kwargs)
+        client = client_class(model, api_key, **merged_kwargs)
     else:
-        if api_key is None:
-            raise ValueError(f"You should directly provide api_key for this provider: {provider}")
-        else:
-            client = AiSuiteLLMClientAsync(full_model_name, api_key, **kwargs)
+        client = LiteLLMClientAsync(full_model_name, api_key, **merged_kwargs)
         
     if (full_model_name, client.api_key) in _memory_async:
         client = _memory_async[(full_model_name, client.api_key)]

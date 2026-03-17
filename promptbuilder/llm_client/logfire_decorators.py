@@ -7,7 +7,7 @@ import logfire
 
 from promptbuilder.llm_client.utils import inherited_decorator
 from promptbuilder.llm_client.config import GLOBAL_CONFIG
-from promptbuilder.llm_client.types import Response, UsageMetadata
+from promptbuilder.llm_client.types import Response, UsageMetadata, content_to_str
 
 
 P = ParamSpec("P")
@@ -24,9 +24,9 @@ def extract_span_data(self, *args, **kwargs) -> dict[str, Any]:
         logfire_messages.append({"role": "system", "content": system_message})
     for content in messages:
         if content.role == "user":
-            logfire_messages.append({"role": "user", "content": content.as_str()})
+            logfire_messages.append({"role": "user", "content": content_to_str(content)})
         elif content.role == "model":
-            logfire_messages.append({"role": "assistant", "content": content.as_str()})
+            logfire_messages.append({"role": "assistant", "content": content_to_str(content)})
     span_data["request_data"] = {"messages": logfire_messages}
     span_data["messages"] = messages
     
@@ -46,12 +46,30 @@ def extract_response_data(response: Response) -> dict[str, Any]:
     response_data = {"message": {"role": "assistant"}}
     response_data["message"]["content"] = response.text
     tool_calls = []
-    for part in response.candidates[0].content.parts:
-        if part.function_call is not None:
-            tool_calls.append({"function": {"name": part.function_call.name, "arguments": part.function_call.args}})
+    if response.candidates is not None and len(response.candidates) > 0:
+        content = response.candidates[0].content
+        if content is not None and content.parts is not None:
+            for part in content.parts:
+                if part.function_call is not None:
+                    tool_calls.append({"function": {"name": part.function_call.name, "arguments": part.function_call.args}})
     if len(tool_calls) > 0:
         response_data["message"]["tool_calls"] = tool_calls
     return response_data
+
+
+def record(span: logfire.LogfireSpan, duration: float, response: Response):
+    span.set_attribute("duration", duration)
+
+    span.set_attribute("response_data", extract_response_data(response))
+    span.set_attribute("candidates", response.candidates)
+    span.set_attribute("parsed", response.parsed)
+    span.set_attribute("response_text", response.text)
+    if response.usage_metadata is not None:
+        span.set_attribute("usage_metadata.cached_content_token_count", response.usage_metadata.cached_content_token_count)
+        span.set_attribute("usage_metadata.candidates_token_count", response.usage_metadata.candidates_token_count)
+        span.set_attribute("usage_metadata.thoughts_token_count", response.usage_metadata.thoughts_token_count)
+        span.set_attribute("usage_metadata.prompt_token_count", response.usage_metadata.prompt_token_count)
+        span.set_attribute("usage_metadata.total_token_count", response.usage_metadata.total_token_count)
 
 
 @inherited_decorator
@@ -69,17 +87,7 @@ def create(class_method: Callable[P, Response]) -> Callable[P, Response]:
         with logfire_llm.span(f"Create with {span_data["full_model_name"]}", **span_data) as span:
             start_time = time.time()
             response = class_method(self, *args, **kwargs)
-            span.set_attribute("duration", time.time() - start_time)
-            
-            span.set_attribute("response_data", extract_response_data(response))
-            span.set_attribute("candidates", response.candidates)
-            span.set_attribute("parsed", response.parsed)
-            span.set_attribute("response_text", response.text)
-            if response.usage_metadata is not None:
-                span.set_attribute("usage_metadata.cached_content_token_count", response.usage_metadata.cached_content_token_count)
-                span.set_attribute("usage_metadata.candidates_token_count", response.usage_metadata.candidates_token_count)
-                span.set_attribute("usage_metadata.prompt_token_count", response.usage_metadata.prompt_token_count)
-                span.set_attribute("usage_metadata.total_token_count", response.usage_metadata.total_token_count)
+            record(span, time.time() - start_time, response)
             
             return response
     
@@ -101,17 +109,7 @@ def create_async(class_method: Callable[P, Awaitable[Response]]) -> Callable[P, 
         with logfire_llm.span(f"Async create with {span_data["full_model_name"]}", **span_data) as span:
             start_time = time.time()
             response = await class_method(self, *args, **kwargs)
-            span.set_attribute("duration", time.time() - start_time)
-            
-            span.set_attribute("response_data", extract_response_data(response))
-            span.set_attribute("candidates", response.candidates)
-            span.set_attribute("parsed", response.parsed)
-            span.set_attribute("response_text", response.text)
-            if response.usage_metadata is not None:
-                span.set_attribute("usage_metadata.cached_content_token_count", response.usage_metadata.cached_content_token_count)
-                span.set_attribute("usage_metadata.candidates_token_count", response.usage_metadata.candidates_token_count)
-                span.set_attribute("usage_metadata.prompt_token_count", response.usage_metadata.prompt_token_count)
-                span.set_attribute("usage_metadata.total_token_count", response.usage_metadata.total_token_count)
+            record(span, time.time() - start_time, response)
             
             return response
             
@@ -150,6 +148,7 @@ def record_streaming(span: logfire.LogfireSpan):
         span.set_attribute("response_text", stream_state.get_response_data()["message"]["content"])
         span.set_attribute("usage_metadata.cached_content_token_count", stream_state.last_usage_data.cached_content_token_count)
         span.set_attribute("usage_metadata.candidates_token_count", stream_state.last_usage_data.candidates_token_count)
+        span.set_attribute("usage_metadata.thoughts_token_count", stream_state.last_usage_data.thoughts_token_count)
         span.set_attribute("usage_metadata.prompt_token_count", stream_state.last_usage_data.prompt_token_count)
         span.set_attribute("usage_metadata.total_token_count", stream_state.last_usage_data.total_token_count)
 

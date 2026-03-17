@@ -111,8 +111,10 @@ class BedrockLLMClient(BaseLLMClient):
         thinking_config: ThinkingConfig | None = None,
         system_message: str | None = None,
         max_tokens: int | None = None,
+        timeout: float | None = None,
         tools: list[Tool] | None = None,
         tool_config: ToolConfig = ToolConfig(),
+        without_cache: bool = False
     ) -> Response:
         bedrock_kwargs : dict[str, Any] = {
             "modelId": self.model,
@@ -120,7 +122,10 @@ class BedrockLLMClient(BaseLLMClient):
         
         if system_message is not None:
             bedrock_kwargs["system"] = [{"text": system_message}]
-        
+
+        if timeout is not None:
+            bedrock_kwargs["timeout"] = timeout
+
         if max_tokens is None:
             max_tokens = self.default_max_tokens
         if max_tokens is not None:
@@ -262,13 +267,14 @@ class BedrockLLMClient(BaseLLMClient):
             )
     
     @_error_handler
-    def create_stream(
+    def _create_stream(
         self,
         messages: list[Content],
         *,
         thinking_config: ThinkingConfig | None = None,
         system_message: str | None = None,
         max_tokens: int | None = None,
+        without_cache: bool = False
     ) -> Iterator[Response]:
         bedrock_kwargs : dict[str, Any] = {
             "modelId": self.model,
@@ -407,8 +413,10 @@ class BedrockLLMClientAsync(BaseLLMClientAsync):
         thinking_config: ThinkingConfig | None = None,
         system_message: str | None = None,
         max_tokens: int | None = None,
+        timeout: float | None = None,
         tools: list[Tool] | None = None,
         tool_config: ToolConfig = ToolConfig(),
+        without_cache: bool = False
     ) -> Response:
         bedrock_kwargs : dict[str, Any] = {
             "modelId": self.model,
@@ -417,6 +425,9 @@ class BedrockLLMClientAsync(BaseLLMClientAsync):
         if system_message is not None:
             bedrock_kwargs["system"] = [{"text": system_message}]
         
+        if timeout is not None:
+            bedrock_kwargs["timeout"] = timeout
+
         if max_tokens is None:
             max_tokens = self.default_max_tokens
         if max_tokens is not None:
@@ -552,13 +563,14 @@ class BedrockLLMClientAsync(BaseLLMClientAsync):
                 )
     
     @_error_handler_async
-    async def create_stream(
+    async def _create_stream(
         self,
         messages: list[Content],
         *,
         thinking_config: ThinkingConfig | None = None,
         system_message: str | None = None,
         max_tokens: int | None = None,
+        without_cache: bool = False
     ) -> AsyncIterator[Response]:
         bedrock_kwargs : dict[str, Any] = {
             "modelId": self.model,

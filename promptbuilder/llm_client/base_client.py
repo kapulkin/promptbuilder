@@ -1,5 +1,6 @@
 import re
 import json
+import hjson
 import os
 import hashlib
 import logging
@@ -58,11 +59,20 @@ class BaseLLMClient(ABC, utils.InheritDecoratorsMixin):
         return self.provider + ":" + self.model
     
     @staticmethod
-    def as_json(text: str) -> Json:
+    @overload
+    def as_json(text: str, raise_on_error: Literal[True], as_hjson: bool = False) -> Json: ...
+
+    @staticmethod
+    @overload
+    def as_json(text: str, raise_on_error: Literal[False], as_hjson: bool = False) -> Json | None: ...
+    
+    @staticmethod
+    def as_json(text: str, raise_on_error: bool = True, as_hjson: bool = False) -> Json | None:
         # Remove markdown code block formatting if present
         text = text.strip()
                 
-        code_block_pattern = r"```(?:json\s)?(.*)```"
+        # Match the outermost fenced block so inner ``` in JSON strings are preserved.
+        code_block_pattern = r"```(?:json)?\s*(.*)```(?=\s*$)"
         match = re.search(code_block_pattern, text, re.DOTALL)
         
         if match:
@@ -70,9 +80,14 @@ class BaseLLMClient(ABC, utils.InheritDecoratorsMixin):
             text = match.group(1).strip()
 
         try:
-            return json.loads(text, strict=False)
-        except json.JSONDecodeError as e:
-            raise ValueError(f"Failed to parse LLM response as JSON:\n{text}")
+            if as_hjson:
+                return hjson.loads(text, strict=False)
+            else:
+                return json.loads(text)
+        except (hjson.HjsonDecodeError, json.JSONDecodeError) as e:
+            if raise_on_error:
+                raise ValueError(f"Failed to parse LLM response as JSON:\n{text}") from e
+            return None
 
     def create(
         self,
@@ -82,9 +97,11 @@ class BaseLLMClient(ABC, utils.InheritDecoratorsMixin):
         thinking_config: ThinkingConfig | None = None,
         system_message: str | None = None,
         max_tokens: int | None = None,
+        timeout: float | None = None,
         tools: list[Tool] | None = None,
         tool_config: ToolConfig = ToolConfig(),
-        autocomplete: bool = False
+        autocomplete: bool = False,
+        without_cache: bool = False
     ) -> Response:
         if autocomplete and (result_type == "tools" or isinstance(result_type, type)):
             raise ValueError("autocompletion is not supported with 'tools' or pydantic model result_type")
@@ -97,38 +114,44 @@ class BaseLLMClient(ABC, utils.InheritDecoratorsMixin):
             result_type=result_type,
             thinking_config=thinking_config,
             system_message=system_message,
-            max_tokens=max_tokens,
+            max_tokens=max_tokens if not autocomplete else None,
+            timeout=timeout,
             tools=tools,
             tool_config=tool_config,
+            without_cache=without_cache,
         )
 
         total_count = BaseLLMClient._response_out_tokens(response)
 
         finish_reason = response.candidates[0].finish_reason.value if response.candidates and response.candidates[0].finish_reason else None
-        while autocomplete and response.candidates and finish_reason == FinishReason.MAX_TOKENS.value:
-            BaseLLMClient._append_generated_part(messages, response)
+        if autocomplete:
+            while response.candidates and finish_reason == FinishReason.MAX_TOKENS.value:
+                BaseLLMClient._append_generated_part(messages, response, result_type)
 
-            response = self._create(
-                messages=messages,
-                result_type=result_type,
-                thinking_config=thinking_config,
-                system_message=system_message,
-                max_tokens=max_tokens,
-                tools=tools,
-                tool_config=tool_config,
-            )
-            finish_reason = response.candidates[0].finish_reason.value if response.candidates and response.candidates[0].finish_reason else None
-            total_count += BaseLLMClient._response_out_tokens(response)
-            if max_tokens is not None and total_count >= max_tokens:
-                break
-        if response.candidates:
-            BaseLLMClient._append_generated_part(messages, response)
-            response.candidates[0].content = messages[-1] if len(messages) > 0 else None
+                response = self._create(
+                    messages=messages,
+                    result_type=result_type,
+                    thinking_config=thinking_config,
+                    system_message=system_message,
+                    max_tokens=max_tokens if not autocomplete else None,
+                    timeout=timeout,
+                    tools=tools,
+                    tool_config=tool_config,
+                )
+                finish_reason = response.candidates[0].finish_reason.value if response.candidates and response.candidates[0].finish_reason else None
+                total_count += BaseLLMClient._response_out_tokens(response)
+                if max_tokens is not None and total_count >= max_tokens:
+                    break
+            if response.candidates and response.candidates[0].content:
+                appended_message = BaseLLMClient._append_generated_part(messages, response, result_type)
+                if appended_message is not None:
+                    response.candidates[0].content = appended_message
         return response
 
     @logfire_decorators.create
     @utils.retry_cls
     @utils.rpm_limit_cls
+    @utils.tpm_limit_cls
     @abstractmethod
     def _create(
         self,
@@ -138,8 +161,10 @@ class BaseLLMClient(ABC, utils.InheritDecoratorsMixin):
         thinking_config: ThinkingConfig | None = None,
         system_message: str | None = None,
         max_tokens: int | None = None,
+        timeout: float | None = None,
         tools: list[Tool] | None = None,
         tool_config: ToolConfig = ToolConfig(),
+        without_cache: bool = False
     ) -> Response:
         pass
 
@@ -152,9 +177,11 @@ class BaseLLMClient(ABC, utils.InheritDecoratorsMixin):
         thinking_config: ThinkingConfig | None = None,
         system_message: str | None = None,
         max_tokens: int | None = None,
+        timeout: float | None = None,
         tools: None = None,
         tool_choice_mode: Literal["NONE"] = "NONE",
         autocomplete: bool = False,
+        without_cache: bool = False
     ) -> str: ...
     @overload
     def create_value(
@@ -165,9 +192,11 @@ class BaseLLMClient(ABC, utils.InheritDecoratorsMixin):
         thinking_config: ThinkingConfig | None = None,
         system_message: str | None = None,
         max_tokens: int | None = None,
+        timeout: float | None = None,
         tools: None = None,
         tool_choice_mode: Literal["NONE"] = "NONE",
         autocomplete: bool = False,
+        without_cache: bool = False
     ) -> Json: ...
     @overload
     def create_value(
@@ -178,9 +207,11 @@ class BaseLLMClient(ABC, utils.InheritDecoratorsMixin):
         thinking_config: ThinkingConfig | None = None,
         system_message: str | None = None,
         max_tokens: int | None = None,
+        timeout: float | None = None,
         tools: None = None,
         tool_choice_mode: Literal["NONE"] = "NONE",
         autocomplete: bool = False,
+        without_cache: bool = False
     ) -> PydanticStructure: ...
     @overload
     def create_value(
@@ -191,9 +222,11 @@ class BaseLLMClient(ABC, utils.InheritDecoratorsMixin):
         thinking_config: ThinkingConfig | None = None,
         system_message: str | None = None,
         max_tokens: int | None = None,
+        timeout: float | None = None,
         tools: list[Tool],
         tool_choice_mode: Literal["ANY"],
         autocomplete: bool = False,
+        without_cache: bool = False
     ) -> list[FunctionCall]: ...
 
     def create_value(
@@ -204,9 +237,12 @@ class BaseLLMClient(ABC, utils.InheritDecoratorsMixin):
         thinking_config: ThinkingConfig | None = None,
         system_message: str | None = None,
         max_tokens: int | None = None,
+        timeout: float | None = None,
         tools: list[Tool] | None = None,
         tool_choice_mode: Literal["ANY", "NONE"] = "NONE",
         autocomplete: bool = False,
+        raise_on_json_error: bool = True,
+        without_cache: bool = False
     ):
         if result_type == "tools":
             response = self.create(
@@ -215,8 +251,10 @@ class BaseLLMClient(ABC, utils.InheritDecoratorsMixin):
                 thinking_config=thinking_config,
                 system_message=system_message,
                 max_tokens=max_tokens,
+                timeout=timeout,
                 tools=tools,
                 tool_config=ToolConfig(function_calling_config=FunctionCallingConfig(mode=tool_choice_mode)),
+                without_cache=without_cache,
             )
             functions: list[FunctionCall] = []
             for candidate in response.candidates:
@@ -231,21 +269,25 @@ class BaseLLMClient(ABC, utils.InheritDecoratorsMixin):
             thinking_config=thinking_config,
             system_message=system_message,
             max_tokens=max_tokens,
+            timeout=timeout,
             tools=tools,
             tool_config=ToolConfig(function_calling_config=FunctionCallingConfig(mode=tool_choice_mode)),
             autocomplete=autocomplete,
+            without_cache=without_cache,
         )
 
         if result_type is None:
             return response.text
         else:
-            if result_type == "json":
-                response.parsed = BaseLLMClient.as_json(response.text)
+            if result_type == "json" and response.parsed is None:
+                text = response.text
+                response.parsed = BaseLLMClient.as_json(text, raise_on_json_error)
+                if response.parsed is None:
+                    return text
             return response.parsed
     
-
     @staticmethod
-    def _append_generated_part(messages: list[Content], response: Response):
+    def _responce_to_text(response: Response):
         assert(response.candidates and response.candidates[0].content), "Response must contain at least one candidate with content."
 
         text_parts = [
@@ -254,6 +296,7 @@ class BaseLLMClient(ABC, utils.InheritDecoratorsMixin):
         if text_parts is not None and len(text_parts) > 0:
             response_text = "".join(part.text for part in text_parts)
             is_thought = False
+            return response_text, is_thought
         else:
             thought_parts = [
                 part for part in response.candidates[0].content.parts if part.text and part.thought
@@ -261,19 +304,34 @@ class BaseLLMClient(ABC, utils.InheritDecoratorsMixin):
             if thought_parts is not None and len(thought_parts) > 0:
                 response_text = "".join(part.text for part in thought_parts)
                 is_thought = True
+                return response_text, is_thought
             else:
-                raise ValueError("No text or thought found in the response parts.")
+                return None, None
+
+    @staticmethod
+    def _append_to_message(message: Content, text: str, is_thought: bool | None):
+        if message.parts and message.parts[-1].text is not None and message.parts[-1].thought == is_thought:
+            message.parts[-1].text += text
+        else:
+            if not message.parts:
+                message.parts = []
+            message.parts.append(Part(text=text, thought=is_thought))
+
+    @staticmethod
+    def _append_generated_part(messages: list[Content], response: Response, result_type: ResultType = None) -> Content | None:
+        response_text, is_thought = BaseLLMClient._responce_to_text(response)
+        if response_text is None:
+            return None
         
         if len(messages) > 0 and messages[-1].role == "model":
             message_to_append = messages[-1]
-            if message_to_append.parts and message_to_append.parts[-1].text is not None and message_to_append.parts[-1].thought == is_thought:
-                message_to_append.parts[-1].text += response_text
-            else:
-                if not message_to_append.parts:
-                    message_to_append.parts = []
-                message_to_append.parts.append(Part(text=response_text, thought=is_thought))
+            if result_type is None or result_type == "str":
+                BaseLLMClient._append_to_message(message_to_append, response_text, is_thought)
+            else: # json, pydantic model
+                message_to_append.parts = [Part(text=response_text, thought=is_thought)]
         else:
             messages.append(Content(parts=[Part(text=response_text, thought=is_thought)], role="model"))
+        return messages[-1]
 
     @staticmethod
     def _response_out_tokens(response: Response):
@@ -282,6 +340,18 @@ class BaseLLMClient(ABC, utils.InheritDecoratorsMixin):
     @logfire_decorators.create_stream
     @utils.retry_cls
     @utils.rpm_limit_cls
+    @utils.tpm_limit_cls
+    def _create_stream(
+        self,
+        messages: list[Content],
+        *,
+        thinking_config: ThinkingConfig | None = None,
+        system_message: str | None = None,
+        max_tokens: int | None = None,
+        without_cache: bool = False
+    ) -> Iterator[Response]:
+        raise NotImplementedError
+    
     def create_stream(
         self,
         messages: list[Content],
@@ -289,9 +359,55 @@ class BaseLLMClient(ABC, utils.InheritDecoratorsMixin):
         thinking_config: ThinkingConfig | None = None,
         system_message: str | None = None,
         max_tokens: int | None = None,
+        autocomplete: bool = False,
+        without_cache: bool = False
     ) -> Iterator[Response]:
-        raise NotImplementedError
-    
+        if max_tokens is None:
+            max_tokens = self.default_max_tokens
+        
+        stream_messages = []
+        total_count = 0
+        response: Response | None = None
+
+        # Factory to (re)create the underlying provider stream using current accumulated state
+        def _stream_factory():
+            nonlocal response, total_count
+            tries = 3
+            while tries > 0:
+                try:
+                    iter = self._create_stream(
+                        messages=messages + stream_messages,
+                        thinking_config=thinking_config,
+                        system_message=system_message,
+                        max_tokens=max_tokens if not autocomplete else None,
+                        without_cache=without_cache,
+                    )
+                    for response in iter:
+                        yield response
+                    break
+                except Exception as e:
+                    tries -= 1
+                    if tries == 0:
+                        raise
+                    logger.warning(f"Stream generation error: {e}, retrying...")
+
+        # Use retry to iterate through the stream; on exception previously yielded parts
+        # are already merged into stream_messages so resumed attempts continue generation.
+        for response in _stream_factory():
+            BaseLLMClient._append_generated_part(stream_messages, response)
+            total_count += BaseLLMClient._response_out_tokens(response)
+            yield response
+        finish_reason = response.candidates[0].finish_reason.value if response and response.candidates and response.candidates[0].finish_reason else None
+        if finish_reason and autocomplete:
+            while response.candidates and finish_reason == FinishReason.MAX_TOKENS.value:
+                for response in _stream_factory():
+                    BaseLLMClient._append_generated_part(stream_messages, response)
+                    total_count += BaseLLMClient._response_out_tokens(response)
+                    yield response
+                finish_reason = response.candidates[0].finish_reason.value if response and response.candidates and response.candidates[0].finish_reason else None
+                if max_tokens is not None and total_count >= max_tokens:
+                    break
+
     @overload
     def from_text(
         self,
@@ -304,6 +420,7 @@ class BaseLLMClient(ABC, utils.InheritDecoratorsMixin):
         tools: None = None,
         tool_choice_mode: Literal["NONE"] = "NONE",
         autocomplete: bool = False,
+        without_cache: bool = False
     ) -> str: ...
     @overload
     def from_text(
@@ -317,6 +434,7 @@ class BaseLLMClient(ABC, utils.InheritDecoratorsMixin):
         tools: None = None,
         tool_choice_mode: Literal["NONE"] = "NONE",
         autocomplete: bool = False,
+        without_cache: bool = False
     ) -> Json: ...
     @overload
     def from_text(
@@ -330,6 +448,7 @@ class BaseLLMClient(ABC, utils.InheritDecoratorsMixin):
         tools: None = None,
         tool_choice_mode: Literal["NONE"] = "NONE",
         autocomplete: bool = False,
+        without_cache: bool = False
     ) -> PydanticStructure: ...
     @overload
     def from_text(
@@ -343,6 +462,7 @@ class BaseLLMClient(ABC, utils.InheritDecoratorsMixin):
         tools: list[Tool],
         tool_choice_mode: Literal["ANY"],
         autocomplete: bool = False,
+        without_cache: bool = False
     ) -> list[FunctionCall]: ...
     
     def from_text(
@@ -356,6 +476,7 @@ class BaseLLMClient(ABC, utils.InheritDecoratorsMixin):
         tools: list[Tool] | None = None,
         tool_choice_mode: Literal["ANY", "NONE"] = "NONE",
         autocomplete: bool = False,
+        without_cache: bool = False
     ):
         return self.create_value(
             messages=[Content(parts=[Part(text=prompt)], role="user")],
@@ -366,6 +487,7 @@ class BaseLLMClient(ABC, utils.InheritDecoratorsMixin):
             tools=tools,
             tool_choice_mode=tool_choice_mode,
             autocomplete=autocomplete,
+            without_cache=without_cache,
         )
 
 
@@ -419,9 +541,11 @@ class BaseLLMClientAsync(ABC, utils.InheritDecoratorsMixin):
         thinking_config: ThinkingConfig | None = None,
         system_message: str | None = None,
         max_tokens: int | None = None,
+        timeout: float | None = None,
         tools: list[Tool] | None = None,
         tool_config: ToolConfig = ToolConfig(),
         autocomplete: bool = False,
+        without_cache: bool = False
     ) -> Response:
         if autocomplete and (result_type == "tools" or isinstance(result_type, type)):
             raise ValueError("autocompletion is not supported with 'tools' or pydantic model result_type")
@@ -434,38 +558,45 @@ class BaseLLMClientAsync(ABC, utils.InheritDecoratorsMixin):
             result_type=result_type,
             thinking_config=thinking_config,
             system_message=system_message,
-            max_tokens=max_tokens,
+            max_tokens=max_tokens if not autocomplete else None,
+            timeout=timeout,
             tools=tools,
             tool_config=tool_config,
+            without_cache=without_cache,
         )
 
         total_count = BaseLLMClient._response_out_tokens(response)
 
         finish_reason = response.candidates[0].finish_reason.value if response.candidates and response.candidates[0].finish_reason else None
-        while autocomplete and response.candidates and finish_reason == FinishReason.MAX_TOKENS.value:
-            BaseLLMClient._append_generated_part(messages, response)
+        if autocomplete:
+            while response.candidates and finish_reason == FinishReason.MAX_TOKENS.value:
+                BaseLLMClient._append_generated_part(messages, response, result_type)
 
-            response = await self._create(
-                messages=messages,
-                result_type=result_type,
-                thinking_config=thinking_config,
-                system_message=system_message,
-                max_tokens=max_tokens,
-                tools=tools,
-                tool_config=tool_config,
-            )
-            finish_reason = response.candidates[0].finish_reason.value if response.candidates and response.candidates[0].finish_reason else None
-            total_count += BaseLLMClient._response_out_tokens(response)
-            if max_tokens is not None and total_count >= max_tokens:
-                break
-        if response.candidates:
-            BaseLLMClient._append_generated_part(messages, response)
-            response.candidates[0].content = messages[-1] if len(messages) > 0 else None
+                response = await self._create(
+                    messages=messages,
+                    result_type=result_type,
+                    thinking_config=thinking_config,
+                    system_message=system_message,
+                    max_tokens=max_tokens if not autocomplete else None,
+                    timeout=timeout,
+                    tools=tools,
+                    tool_config=tool_config,
+                    without_cache=without_cache,
+                )
+                finish_reason = response.candidates[0].finish_reason.value if response.candidates and response.candidates[0].finish_reason else None
+                total_count += BaseLLMClient._response_out_tokens(response)
+                if max_tokens is not None and total_count >= max_tokens:
+                    break
+            if response.candidates and response.candidates[0].content:
+                appended_message = BaseLLMClient._append_generated_part(messages, response, result_type)
+                if appended_message is not None:
+                    response.candidates[0].content = appended_message
         return response
 
     @logfire_decorators.create_async
     @utils.retry_cls_async
     @utils.rpm_limit_cls_async
+    @utils.tpm_limit_cls_async
     @abstractmethod
     async def _create(
         self,
@@ -475,8 +606,10 @@ class BaseLLMClientAsync(ABC, utils.InheritDecoratorsMixin):
         thinking_config: ThinkingConfig | None = None,
         system_message: str | None = None,
         max_tokens: int | None = None,
+        timeout: float | None = None,
         tools: list[Tool] | None = None,
         tool_config: ToolConfig = ToolConfig(),
+        without_cache: bool = False,
     ) -> Response:
         pass
 
@@ -489,9 +622,11 @@ class BaseLLMClientAsync(ABC, utils.InheritDecoratorsMixin):
         thinking_config: ThinkingConfig | None = None,
         system_message: str | None = None,
         max_tokens: int | None = None,
+        timeout: float | None = None,
         tools: None = None,
         tool_choice_mode: Literal["NONE"] = "NONE",
         autocomplete: bool = False,
+        without_cache: bool = False,
     ) -> str: ...
     @overload
     async def create_value(
@@ -502,9 +637,12 @@ class BaseLLMClientAsync(ABC, utils.InheritDecoratorsMixin):
         thinking_config: ThinkingConfig | None = None,
         system_message: str | None = None,
         max_tokens: int | None = None,
+        timeout: float | None = None,
         tools: None = None,
         tool_choice_mode: Literal["NONE"] = "NONE",
         autocomplete: bool = False,
+        raise_on_json_error: bool = True,
+        without_cache: bool = False,
     ) -> Json: ...
     @overload
     async def create_value(
@@ -515,9 +653,11 @@ class BaseLLMClientAsync(ABC, utils.InheritDecoratorsMixin):
         thinking_config: ThinkingConfig | None = None,
         system_message: str | None = None,
         max_tokens: int | None = None,
+        timeout: float | None = None,
         tools: None = None,
         tool_choice_mode: Literal["NONE"] = "NONE",
         autocomplete: bool = False,
+        without_cache: bool = False,
     ) -> PydanticStructure: ...
     @overload
     async def create_value(
@@ -528,9 +668,11 @@ class BaseLLMClientAsync(ABC, utils.InheritDecoratorsMixin):
         thinking_config: ThinkingConfig | None = None,
         system_message: str | None = None,
         max_tokens: int | None = None,
+        timeout: float | None = None,
         tools: list[Tool],
         tool_choice_mode: Literal["ANY"],
         autocomplete: bool = False,
+        without_cache: bool = False,
     ) -> list[FunctionCall]: ...
 
     async def create_value(
@@ -541,9 +683,12 @@ class BaseLLMClientAsync(ABC, utils.InheritDecoratorsMixin):
         thinking_config: ThinkingConfig | None = None,
         system_message: str | None = None,
         max_tokens: int | None = None,
+        timeout: float | None = None,
         tools: list[Tool] | None = None,
         tool_choice_mode: Literal["ANY", "NONE"] = "NONE",
         autocomplete: bool = False,
+        raise_on_json_error: bool = True,
+        without_cache: bool = False,
     ):
         if result_type == "tools":
             response = await self._create(
@@ -552,6 +697,7 @@ class BaseLLMClientAsync(ABC, utils.InheritDecoratorsMixin):
                 thinking_config=thinking_config,
                 system_message=system_message,
                 max_tokens=max_tokens,
+                timeout=timeout,
                 tools=tools,
                 tool_config=ToolConfig(function_calling_config=FunctionCallingConfig(mode=tool_choice_mode)),
             )
@@ -568,20 +714,37 @@ class BaseLLMClientAsync(ABC, utils.InheritDecoratorsMixin):
             thinking_config=thinking_config,
             system_message=system_message,
             max_tokens=max_tokens,
+            timeout=timeout,
             tools=tools,
             tool_config=ToolConfig(function_calling_config=FunctionCallingConfig(mode=tool_choice_mode)),
-            autocomplete=autocomplete
+            autocomplete=autocomplete,
+            without_cache=without_cache
         )
         if result_type is None:
             return response.text
         else:
-            if result_type == "json":
-                response.parsed = BaseLLMClient.as_json(response.text)
+            if result_type == "json" and response.parsed is None:
+                text = response.text
+                response.parsed = BaseLLMClient.as_json(text, raise_on_json_error)
+                if response.parsed is None:
+                    return text
             return response.parsed
     
     @logfire_decorators.create_stream_async
     @utils.retry_cls_async
     @utils.rpm_limit_cls_async
+    @utils.tpm_limit_cls_async
+    async def _create_stream(
+        self,
+        messages: list[Content],
+        *,
+        thinking_config: ThinkingConfig | None = None,
+        system_message: str | None = None,
+        max_tokens: int | None = None,
+        without_cache: bool = False,
+    ) -> AsyncIterator[Response]:
+        raise NotImplementedError
+    
     async def create_stream(
         self,
         messages: list[Content],
@@ -589,9 +752,53 @@ class BaseLLMClientAsync(ABC, utils.InheritDecoratorsMixin):
         thinking_config: ThinkingConfig | None = None,
         system_message: str | None = None,
         max_tokens: int | None = None,
-    ) -> AsyncIterator[Response]:
-        raise NotImplementedError
-    
+        autocomplete: bool = False,
+        without_cache: bool = False,
+    ) -> AsyncIterator[Response]:          
+        if max_tokens is None:
+            max_tokens = self.default_max_tokens
+        
+        total_count = 0
+        response = None
+
+        async def _stream_factory():
+            nonlocal response, total_count
+            tries = 3
+            while tries > 0:
+                try:
+                    iter = await self._create_stream(
+                        messages=messages,
+                        thinking_config=thinking_config,
+                        system_message=system_message,
+                        max_tokens=max_tokens if not autocomplete else None,
+                        without_cache=without_cache,
+                    )
+
+                    async for response in iter:
+                        BaseLLMClient._append_generated_part(messages, response)
+                        total_count += BaseLLMClient._response_out_tokens(response)
+                        yield response
+                    break
+                except Exception as e:
+                    tries -= 1
+                    if tries <= 0:
+                        raise
+                    logger.warning(f"Stream generation error: {e}, retrying...")
+        
+        stream_iter = _stream_factory()
+        async for response in stream_iter:
+            yield response
+
+        finish_reason = response.candidates[0].finish_reason.value if response and response.candidates and response.candidates[0].finish_reason else None
+        if finish_reason and autocomplete:
+            while response.candidates and finish_reason == FinishReason.MAX_TOKENS.value:
+                stream_iter = _stream_factory()
+                async for response in stream_iter:
+                    yield response
+                finish_reason = response.candidates[0].finish_reason.value if response.candidates and response.candidates[0].finish_reason else None
+                if max_tokens is not None and total_count >= max_tokens:
+                    break
+
     @overload
     async def from_text(
         self,
@@ -604,6 +811,7 @@ class BaseLLMClientAsync(ABC, utils.InheritDecoratorsMixin):
         tools: None = None,
         tool_choice_mode: Literal["NONE"] = "NONE",
         autocomplete: bool = False,
+        without_cache: bool = False,
     ) -> str: ...
     @overload
     async def from_text(
@@ -617,6 +825,7 @@ class BaseLLMClientAsync(ABC, utils.InheritDecoratorsMixin):
         tools: None = None,
         tool_choice_mode: Literal["NONE"] = "NONE",
         autocomplete: bool = False,
+        without_cache: bool = False,
     ) -> Json: ...
     @overload
     async def from_text(
@@ -630,6 +839,7 @@ class BaseLLMClientAsync(ABC, utils.InheritDecoratorsMixin):
         tools: None = None,
         tool_choice_mode: Literal["NONE"] = "NONE",
         autocomplete: bool = False,
+        without_cache: bool = False,
     ) -> PydanticStructure: ...
     @overload
     async def from_text(
@@ -643,6 +853,7 @@ class BaseLLMClientAsync(ABC, utils.InheritDecoratorsMixin):
         tools: list[Tool],
         tool_choice_mode: Literal["ANY"],
         autocomplete: bool = False,
+        without_cache: bool = False,
     ) -> list[FunctionCall]: ...
     
     async def from_text(
@@ -656,6 +867,7 @@ class BaseLLMClientAsync(ABC, utils.InheritDecoratorsMixin):
         tools: list[Tool] | None = None,
         tool_choice_mode: Literal["ANY", "NONE"] = "NONE",
         autocomplete: bool = False,
+        without_cache: bool = False,
     ):
         return await self.create_value(
             messages=[Content(parts=[Part(text=prompt)], role="user")],
@@ -666,6 +878,7 @@ class BaseLLMClientAsync(ABC, utils.InheritDecoratorsMixin):
             tools=tools,
             tool_choice_mode=tool_choice_mode,
             autocomplete=autocomplete,
+            without_cache=without_cache,
         )
 
 
@@ -686,19 +899,66 @@ class CachedLLMClient(BaseLLMClient):
         self.llm_client = llm_client
         self.cache_dir = cache_dir
     
-    def _create(self, messages: list[Content], **kwargs) -> Response:
-        response, messages_dump, cache_path = CachedLLMClient.create_cached(self.llm_client, self.cache_dir, messages, **kwargs)
-        if response is not None:
+    def _create(self, messages: list[Content], system_message: str | None = None, without_cache: bool = False, **kwargs) -> Response:
+        response, messages_dump, cache_path = CachedLLMClient.create_cached(self.llm_client, self.cache_dir, messages, system_message, **kwargs)
+        if not without_cache and response is not None:
             return response
-        response = self.llm_client.create(messages, **kwargs)
+        response = self.llm_client.create(messages, system_message=system_message, **kwargs)
         CachedLLMClient.save_cache(cache_path, self.llm_client.full_model_name, messages_dump, response)
         return response
 
+
+    def _create_stream(
+        self,
+        messages: list[Content],
+        *,
+        thinking_config: ThinkingConfig | None = None,
+        system_message: str | None = None,
+        max_tokens: int | None = None,
+        without_cache: bool = False
+    ) -> Iterator[Response]:
+        response, messages_dump, cache_path = CachedLLMClient.create_cached(
+            self.llm_client, self.cache_dir, messages,
+            thinking_config=thinking_config,
+            system_message=system_message,
+            max_tokens=max_tokens,
+        )
+        if not without_cache and response is not None:
+            yield response
+            return
+        
+        accumulated_content: Content | None = None
+        final_response: Response | None = None
+        
+        for response in self.llm_client._create_stream(
+            messages=messages,
+            thinking_config=thinking_config,
+            system_message=system_message,
+            max_tokens=max_tokens,
+        ):
+            # Accumulate content from each response chunk
+            if response.candidates and response.candidates[0].content:
+                response_text, is_thought = BaseLLMClient._responce_to_text(response)
+                if response_text is not None:
+                    if accumulated_content is None:
+                        accumulated_content = Content(parts=[], role="model")
+                    BaseLLMClient._append_to_message(accumulated_content, response_text, is_thought or False)
+            final_response = response
+            yield response
+        
+        # Save accumulated response to cache
+        if final_response is not None and accumulated_content is not None and final_response.candidates:
+            cached_response = Response(
+                candidates=[final_response.candidates[0].model_copy(update={"content": accumulated_content})],
+                usage_metadata=final_response.usage_metadata,
+            )
+            CachedLLMClient.save_cache(cache_path, self.llm_client.full_model_name, messages_dump, cached_response)
+
     @staticmethod
-    def create_cached(llm_client: BaseLLMClient | BaseLLMClientAsync, cache_dir: str, messages: list[Content], **kwargs) -> tuple[Response | None, list[dict], str]:
+    def create_cached(llm_client: BaseLLMClient | BaseLLMClientAsync, cache_dir: str, messages: list[Content], system_message: str | None = None, **kwargs) -> tuple[Response | None, list[dict], str]:
         messages_dump = [message.model_dump() for message in messages]
         key = hashlib.sha256(
-            json.dumps((llm_client.full_model_name, messages_dump)).encode()
+            json.dumps((llm_client.full_model_name, messages_dump, system_message)).encode()
         ).hexdigest()
         cache_path = os.path.join(cache_dir, f"{key}.json")
         if os.path.exists(cache_path):
@@ -722,7 +982,7 @@ class CachedLLMClient(BaseLLMClient):
     @staticmethod
     def save_cache(cache_path: str, full_model_name: str, messages_dump: list[dict], response: Response):
         with open(cache_path, 'wt') as f:
-            json.dump({"full_model_name": full_model_name, "request": messages_dump, "response": response.model_dump()}, f, indent=4)
+            json.dump({"full_model_name": full_model_name, "request": messages_dump, "response": Response.model_dump(response, mode="json")}, f, indent=4)
 
 
 class CachedLLMClientAsync(BaseLLMClientAsync):
@@ -736,10 +996,57 @@ class CachedLLMClientAsync(BaseLLMClientAsync):
         self.llm_client = llm_client
         self.cache_dir = cache_dir
 
-    async def _create(self, messages: list[Content], **kwargs) -> Response:
-        response, messages_dump, cache_path = CachedLLMClient.create_cached(self.llm_client, self.cache_dir, messages, **kwargs)
-        if response is not None:
+    async def _create(self, messages: list[Content], system_message: str | None = None, without_cache: bool = False, **kwargs) -> Response:
+        response, messages_dump, cache_path = CachedLLMClient.create_cached(self.llm_client, self.cache_dir, messages, system_message, **kwargs)
+        if not without_cache and response is not None:
             return response        
-        response = await self.llm_client.create(messages, **kwargs)
+        response = await self.llm_client.create(messages, system_message=system_message, **kwargs)
         CachedLLMClient.save_cache(cache_path, self.llm_client.full_model_name, messages_dump, response)
         return response
+
+
+    async def _create_stream(
+        self,
+        messages: list[Content],
+        *,
+        thinking_config: ThinkingConfig | None = None,
+        system_message: str | None = None,
+        max_tokens: int | None = None,
+        without_cache: bool = False
+    ) -> AsyncIterator[Response]:
+        response, messages_dump, cache_path = CachedLLMClient.create_cached(
+            self.llm_client, self.cache_dir, messages,
+            thinking_config=thinking_config,
+            system_message=system_message,
+            max_tokens=max_tokens,
+        )
+        if not without_cache and response is not None:
+            yield response
+            return
+        
+        accumulated_content: Content | None = None
+        final_response: Response | None = None
+        
+        async for response in self.llm_client._create_stream(
+            messages=messages,
+            thinking_config=thinking_config,
+            system_message=system_message,
+            max_tokens=max_tokens,
+        ):
+            # Accumulate content from each response chunk
+            if response.candidates and response.candidates[0].content:
+                response_text, is_thought = BaseLLMClient._responce_to_text(response)
+                if response_text is not None:
+                    if accumulated_content is None:
+                        accumulated_content = Content(parts=[], role="model")
+                    BaseLLMClient._append_to_message(accumulated_content, response_text, is_thought or False)
+            final_response = response
+            yield response
+        
+        # Save accumulated response to cache
+        if final_response is not None and accumulated_content is not None and final_response.candidates:
+            cached_response = Response(
+                candidates=[final_response.candidates[0].model_copy(update={"content": accumulated_content})],
+                usage_metadata=final_response.usage_metadata,
+            )
+            CachedLLMClient.save_cache(cache_path, self.llm_client.full_model_name, messages_dump, cached_response)

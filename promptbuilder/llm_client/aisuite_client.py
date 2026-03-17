@@ -71,6 +71,7 @@ class AiSuiteLLMClient(BaseLLMClient):
         thinking_config: ThinkingConfig = ThinkingConfig(),
         system_message: str | None = None,
         max_tokens: int | None = None,
+        timeout: float | None = None,
         tools: list[Tool] | None = None,
         tool_config: ToolConfig = ToolConfig(),
     ) -> Response:
@@ -230,6 +231,7 @@ class AiSuiteLLMClientAsync(BaseLLMClientAsync):
         thinking_config: ThinkingConfig = ThinkingConfig(),
         system_message: str | None = None,
         max_tokens: int | None = None,
+        timeout: float | None = None,
         tools: list[Tool] | None = None,
         tool_config: ToolConfig = ToolConfig(),
     ) -> Response:
