@@ -6,7 +6,7 @@ import hashlib
 import logging
 from abc import ABC, abstractmethod
 from typing import Iterator, AsyncIterator, Literal, overload
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 
 from promptbuilder.llm_client.types import Response, Content, Part, Tool, ToolConfig, FunctionCall, FunctionCallingConfig, Json, ThinkingConfig, ApiKey, PydanticStructure, ResultType, FinishReason
 import promptbuilder.llm_client.utils as utils
@@ -344,6 +344,7 @@ class BaseLLMClient(ABC, utils.InheritDecoratorsMixin):
     def _create_stream(
         self,
         messages: list[Content],
+        result_type: ResultType = None,
         *,
         thinking_config: ThinkingConfig | None = None,
         system_message: str | None = None,
@@ -355,6 +356,7 @@ class BaseLLMClient(ABC, utils.InheritDecoratorsMixin):
     def create_stream(
         self,
         messages: list[Content],
+        result_type: ResultType = None,
         *,
         thinking_config: ThinkingConfig | None = None,
         system_message: str | None = None,
@@ -362,6 +364,9 @@ class BaseLLMClient(ABC, utils.InheritDecoratorsMixin):
         autocomplete: bool = False,
         without_cache: bool = False
     ) -> Iterator[Response]:
+        if autocomplete and isinstance(result_type, type):
+            raise ValueError("autocompletion is not supported with pydantic model result_type")
+
         if max_tokens is None:
             max_tokens = self.default_max_tokens
         
@@ -377,6 +382,7 @@ class BaseLLMClient(ABC, utils.InheritDecoratorsMixin):
                 try:
                     iter = self._create_stream(
                         messages=messages + stream_messages,
+                        result_type=result_type,
                         thinking_config=thinking_config,
                         system_message=system_message,
                         max_tokens=max_tokens if not autocomplete else None,
@@ -737,6 +743,7 @@ class BaseLLMClientAsync(ABC, utils.InheritDecoratorsMixin):
     async def _create_stream(
         self,
         messages: list[Content],
+        result_type: ResultType = None,
         *,
         thinking_config: ThinkingConfig | None = None,
         system_message: str | None = None,
@@ -748,6 +755,7 @@ class BaseLLMClientAsync(ABC, utils.InheritDecoratorsMixin):
     async def create_stream(
         self,
         messages: list[Content],
+        result_type: ResultType = None,
         *,
         thinking_config: ThinkingConfig | None = None,
         system_message: str | None = None,
@@ -755,6 +763,9 @@ class BaseLLMClientAsync(ABC, utils.InheritDecoratorsMixin):
         autocomplete: bool = False,
         without_cache: bool = False,
     ) -> AsyncIterator[Response]:          
+        if autocomplete and isinstance(result_type, type):
+            raise ValueError("autocompletion is not supported with pydantic model result_type")
+
         if max_tokens is None:
             max_tokens = self.default_max_tokens
         
@@ -763,11 +774,13 @@ class BaseLLMClientAsync(ABC, utils.InheritDecoratorsMixin):
 
         async def _stream_factory():
             nonlocal response, total_count
+            stream_messages: list[Content] = []
             tries = 3
             while tries > 0:
                 try:
                     iter = await self._create_stream(
-                        messages=messages,
+                        messages=messages + stream_messages,
+                        result_type=result_type,
                         thinking_config=thinking_config,
                         system_message=system_message,
                         max_tokens=max_tokens if not autocomplete else None,
@@ -775,7 +788,7 @@ class BaseLLMClientAsync(ABC, utils.InheritDecoratorsMixin):
                     )
 
                     async for response in iter:
-                        BaseLLMClient._append_generated_part(messages, response)
+                        BaseLLMClient._append_generated_part(stream_messages, response)
                         total_count += BaseLLMClient._response_out_tokens(response)
                         yield response
                     break
@@ -911,6 +924,7 @@ class CachedLLMClient(BaseLLMClient):
     def _create_stream(
         self,
         messages: list[Content],
+        result_type: ResultType = None,
         *,
         thinking_config: ThinkingConfig | None = None,
         system_message: str | None = None,
@@ -919,6 +933,7 @@ class CachedLLMClient(BaseLLMClient):
     ) -> Iterator[Response]:
         response, messages_dump, cache_path = CachedLLMClient.create_cached(
             self.llm_client, self.cache_dir, messages,
+            result_type=result_type,
             thinking_config=thinking_config,
             system_message=system_message,
             max_tokens=max_tokens,
@@ -932,6 +947,7 @@ class CachedLLMClient(BaseLLMClient):
         
         for response in self.llm_client._create_stream(
             messages=messages,
+            result_type=result_type,
             thinking_config=thinking_config,
             system_message=system_message,
             max_tokens=max_tokens,
@@ -951,6 +967,7 @@ class CachedLLMClient(BaseLLMClient):
             cached_response = Response(
                 candidates=[final_response.candidates[0].model_copy(update={"content": accumulated_content})],
                 usage_metadata=final_response.usage_metadata,
+                parsed=final_response.parsed,
             )
             CachedLLMClient.save_cache(cache_path, self.llm_client.full_model_name, messages_dump, cached_response)
 
@@ -1008,6 +1025,7 @@ class CachedLLMClientAsync(BaseLLMClientAsync):
     async def _create_stream(
         self,
         messages: list[Content],
+        result_type: ResultType = None,
         *,
         thinking_config: ThinkingConfig | None = None,
         system_message: str | None = None,
@@ -1016,6 +1034,7 @@ class CachedLLMClientAsync(BaseLLMClientAsync):
     ) -> AsyncIterator[Response]:
         response, messages_dump, cache_path = CachedLLMClient.create_cached(
             self.llm_client, self.cache_dir, messages,
+            result_type=result_type,
             thinking_config=thinking_config,
             system_message=system_message,
             max_tokens=max_tokens,
@@ -1029,6 +1048,7 @@ class CachedLLMClientAsync(BaseLLMClientAsync):
         
         async for response in self.llm_client._create_stream(
             messages=messages,
+            result_type=result_type,
             thinking_config=thinking_config,
             system_message=system_message,
             max_tokens=max_tokens,
@@ -1048,5 +1068,6 @@ class CachedLLMClientAsync(BaseLLMClientAsync):
             cached_response = Response(
                 candidates=[final_response.candidates[0].model_copy(update={"content": accumulated_content})],
                 usage_metadata=final_response.usage_metadata,
+                parsed=final_response.parsed,
             )
             CachedLLMClient.save_cache(cache_path, self.llm_client.full_model_name, messages_dump, cached_response)

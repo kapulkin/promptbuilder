@@ -39,28 +39,40 @@ def _error_handler(func: Callable[P, Response]) -> Callable[P, Response]:
     return wrapper
 
 class OpenaiStreamIterator:
-    def __init__(self, openai_iterator: Stream[ResponseStreamEvent]):
-        self._openai_iterator = openai_iterator
+    def __init__(self, openai_stream_manager, result_type: ResultType = None):
+        self._openai_stream_manager = openai_stream_manager
+        self._result_type = result_type
 
     def __iter__(self) -> Iterator[Response]:
         output_tokens: int | None = None
         input_tokens: int | None = None
         total_tokens: int | None = None
-        for next_event in self._openai_iterator:
-            if next_event.type == "response.output_text.delta":
-                parts = [Part(text=next_event.delta)]
-                yield Response(candidates=[Candidate(content=Content(parts=parts, role="model"))])
-            elif next_event.type == "response.completed":
-                output_tokens = next_event.response.usage.output_tokens
-                input_tokens = next_event.response.usage.input_tokens
-                total_tokens = next_event.response.usage.total_tokens
+        response_text = ""
+        parsed = None
+
+        with self._openai_stream_manager as stream:
+            for next_event in stream:
+                if next_event.type == "response.output_text.delta":
+                    response_text += next_event.delta
+                    parts = [Part(text=next_event.delta)]
+                    yield Response(candidates=[Candidate(content=Content(parts=parts, role="model"))])
+                elif next_event.type == "response.completed":
+                    output_tokens = next_event.response.usage.output_tokens
+                    input_tokens = next_event.response.usage.input_tokens
+                    total_tokens = next_event.response.usage.total_tokens
+
+            final_response = stream.get_final_response()
+            if self._result_type == "json":
+                parsed = BaseLLMClient.as_json(response_text, raise_on_error=False)
+            elif isinstance(self._result_type, type(BaseModel)):
+                parsed = getattr(final_response, "output_parsed", None)
         
         usage_metadata = UsageMetadata(
             candidates_token_count=output_tokens,
             prompt_token_count=input_tokens,
             total_token_count=total_tokens,
         )
-        yield Response(candidates=[Candidate(content=Content(parts=[Part(text="")], role="model"))], usage_metadata=usage_metadata)
+        yield Response(candidates=[Candidate(content=Content(parts=[Part(text="")], role="model"))], usage_metadata=usage_metadata, parsed=parsed)
 
 
 class OpenaiLLMClient(BaseLLMClient):
@@ -292,6 +304,7 @@ class OpenaiLLMClient(BaseLLMClient):
     def _create_stream(
         self,
         messages: list[Content],
+        result_type: ResultType = None,
         *,
         thinking_config: ThinkingConfig | None = None,
         system_message: str | None = None,
@@ -312,9 +325,18 @@ class OpenaiLLMClient(BaseLLMClient):
         if thinking_config is None:
             thinking_config = self.default_thinking_config
         openai_kwargs.update(OpenaiLLMClient._process_thinking_config(thinking_config))
-        
-        response = self.client.responses.create(**openai_kwargs, stream=True)
-        return OpenaiStreamIterator(response)
+
+        if result_type == "json":
+            openai_kwargs["text"] = {"format": {"type": "json_object"}}
+            stream_manager = self.client.responses.stream(**openai_kwargs)
+        elif isinstance(result_type, type(BaseModel)):
+            stream_manager = self.client.responses.stream(**openai_kwargs, text_format=result_type)
+        elif result_type is None:
+            stream_manager = self.client.responses.stream(**openai_kwargs)
+        else:
+            raise ValueError(f"Unsupported result_type: {result_type}. Supported types are: None, 'json', or a Pydantic model.")
+
+        return OpenaiStreamIterator(stream_manager, result_type=result_type)
 
     @staticmethod
     def models_list() -> list[Model]:
@@ -364,28 +386,40 @@ def _error_handler_async(func: Callable[P, Awaitable[Response]]) -> Callable[P, 
     return wrapper
 
 class OpenaiStreamIteratorAsync:
-    def __init__(self, openai_iterator: AsyncStream[ResponseStreamEvent]):
-        self._openai_iterator = openai_iterator
+    def __init__(self, openai_stream_manager, result_type: ResultType = None):
+        self._openai_stream_manager = openai_stream_manager
+        self._result_type = result_type
 
     async def __aiter__(self) -> AsyncIterator[Response]:
         output_tokens: int | None = None
         input_tokens: int | None = None
         total_tokens: int | None = None
-        async for next_event in self._openai_iterator:
-            if next_event.type == "response.output_text.delta":
-                parts = [Part(text=next_event.delta)]
-                yield Response(candidates=[Candidate(content=Content(parts=parts, role="model"))])
-            elif next_event.type == "response.completed":
-                output_tokens = next_event.response.usage.output_tokens
-                input_tokens = next_event.response.usage.input_tokens
-                total_tokens = next_event.response.usage.total_tokens
+        response_text = ""
+        parsed = None
+
+        async with self._openai_stream_manager as stream:
+            async for next_event in stream:
+                if next_event.type == "response.output_text.delta":
+                    response_text += next_event.delta
+                    parts = [Part(text=next_event.delta)]
+                    yield Response(candidates=[Candidate(content=Content(parts=parts, role="model"))])
+                elif next_event.type == "response.completed":
+                    output_tokens = next_event.response.usage.output_tokens
+                    input_tokens = next_event.response.usage.input_tokens
+                    total_tokens = next_event.response.usage.total_tokens
+
+            final_response = await stream.get_final_response()
+            if self._result_type == "json":
+                parsed = BaseLLMClient.as_json(response_text, raise_on_error=False)
+            elif isinstance(self._result_type, type(BaseModel)):
+                parsed = getattr(final_response, "output_parsed", None)
                 
         usage_metadata = UsageMetadata(
             candidates_token_count=output_tokens,
             prompt_token_count=input_tokens,
             total_token_count=total_tokens,
         )
-        yield Response(candidates=[Candidate(content=Content(parts=[Part(text="")], role="model"))], usage_metadata=usage_metadata)
+        yield Response(candidates=[Candidate(content=Content(parts=[Part(text="")], role="model"))], usage_metadata=usage_metadata, parsed=parsed)
 
 
 class OpenaiLLMClientAsync(BaseLLMClientAsync):
@@ -566,6 +600,7 @@ class OpenaiLLMClientAsync(BaseLLMClientAsync):
     async def _create_stream(
         self,
         messages: list[Content],
+        result_type: ResultType = None,
         *,
         thinking_config: ThinkingConfig | None = None,
         system_message: str | None = None,
@@ -593,9 +628,18 @@ class OpenaiLLMClientAsync(BaseLLMClientAsync):
         if thinking_config is None:
             thinking_config = self.default_thinking_config
         openai_kwargs.update(OpenaiLLMClient._process_thinking_config(thinking_config))
-        
-        response = await self.client.responses.create(**openai_kwargs, stream=True)
-        return OpenaiStreamIteratorAsync(response)
+
+        if result_type == "json":
+            openai_kwargs["text"] = {"format": {"type": "json_object"}}
+            stream_manager = self.client.responses.stream(**openai_kwargs)
+        elif isinstance(result_type, type(BaseModel)):
+            stream_manager = self.client.responses.stream(**openai_kwargs, text_format=result_type)
+        elif result_type is None:
+            stream_manager = self.client.responses.stream(**openai_kwargs)
+        else:
+            raise ValueError(f"Unsupported result_type: {result_type}. Supported types are: None, 'json', or a Pydantic model.")
+
+        return OpenaiStreamIteratorAsync(stream_manager, result_type=result_type)
 
     @staticmethod
     def models_list() -> list[Model]:

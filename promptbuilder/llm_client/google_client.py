@@ -226,9 +226,6 @@ class GoogleLLMClient(BaseLLMClient):
     def _preprocess_messages(messages: list[Content]) -> list[Content]:
         new_messages = []
         for message in messages:
-            # TODO:
-            # copy parts from message to new_message
-            # if part has inline_data, set display_name to None in new_message
             new_parts = []
             if message.parts:
                 for part in message.parts:
@@ -311,12 +308,14 @@ class GoogleLLMClient(BaseLLMClient):
     def _create_stream(
         self,
         messages: list[Content],
+        result_type: ResultType = None,
         *,
         thinking_config: ThinkingConfig | None = None,
         system_message: str | None = None,
         max_tokens: int | None = None,
         without_cache: bool = False
     ) -> Iterator[Response]:
+        messages = self._preprocess_messages(messages)
         # Convert custom types to google.genai.types
         genai_messages = _convert_messages_to_genai(messages)
         
@@ -330,6 +329,14 @@ class GoogleLLMClient(BaseLLMClient):
         if thinking_config is None:
             thinking_config = self.default_thinking_config
         config.thinking_config = _convert_thinking_config_to_genai(thinking_config)
+
+        if result_type == "json":
+            config.response_mime_type = "application/json"
+        elif isinstance(result_type, type(BaseModel)):
+            config.response_mime_type = "application/json"
+            config.response_schema = result_type
+        elif result_type is not None:
+            raise ValueError(f"Unsupported result_type: {result_type}. Supported types are: None, 'json', or a Pydantic model.")
         
         response = self.client.models.generate_content_stream(
             model=self.model,
@@ -476,12 +483,14 @@ class GoogleLLMClientAsync(BaseLLMClientAsync):
     async def _create_stream(
         self,
         messages: list[Content],
+        result_type: ResultType = None,
         *,
         thinking_config: ThinkingConfig | None = None,
         system_message: str | None = None,
         max_tokens: int | None = None,
         without_cache: bool = False
     ) -> AsyncIterator[Response]:
+        messages = GoogleLLMClient._preprocess_messages(messages)
         # Convert custom types to google.genai.types
         genai_messages = _convert_messages_to_genai(messages)
         
@@ -495,6 +504,14 @@ class GoogleLLMClientAsync(BaseLLMClientAsync):
         if thinking_config is None:
             thinking_config = self.default_thinking_config
         config.thinking_config = _convert_thinking_config_to_genai(thinking_config)
+
+        if result_type == "json":
+            config.response_mime_type = "application/json"
+        elif isinstance(result_type, type(BaseModel)):
+            config.response_mime_type = "application/json"
+            config.response_schema = result_type
+        elif result_type is not None:
+            raise ValueError(f"Unsupported result_type: {result_type}. Supported types are: None, 'json', or a Pydantic model.")
         
         response = await self.client.aio.models.generate_content_stream(
             model=self.model,
