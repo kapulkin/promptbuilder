@@ -125,6 +125,7 @@ class BaseLLMClient(ABC, utils.InheritDecoratorsMixin):
 
         finish_reason = response.candidates[0].finish_reason.value if response.candidates and response.candidates[0].finish_reason else None
         if autocomplete:
+            messages = messages.copy()
             while response.candidates and finish_reason == FinishReason.MAX_TOKENS.value:
                 BaseLLMClient._append_generated_part(messages, response, result_type)
 
@@ -575,6 +576,7 @@ class BaseLLMClientAsync(ABC, utils.InheritDecoratorsMixin):
 
         finish_reason = response.candidates[0].finish_reason.value if response.candidates and response.candidates[0].finish_reason else None
         if autocomplete:
+            messages = messages.copy()
             while response.candidates and finish_reason == FinishReason.MAX_TOKENS.value:
                 BaseLLMClient._append_generated_part(messages, response, result_type)
 
