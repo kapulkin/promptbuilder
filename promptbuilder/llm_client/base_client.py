@@ -138,6 +138,7 @@ class BaseLLMClient(ABC, utils.InheritDecoratorsMixin):
                     timeout=timeout,
                     tools=tools,
                     tool_config=tool_config,
+                    without_cache=without_cache,
                 )
                 finish_reason = response.candidates[0].finish_reason.value if response.candidates and response.candidates[0].finish_reason else None
                 total_count += BaseLLMClient._response_out_tokens(response)
@@ -708,6 +709,7 @@ class BaseLLMClientAsync(ABC, utils.InheritDecoratorsMixin):
                 timeout=timeout,
                 tools=tools,
                 tool_config=ToolConfig(function_calling_config=FunctionCallingConfig(mode=tool_choice_mode)),
+                without_cache=without_cache,
             )
             functions: list[FunctionCall] = []
             for candidate in response.candidates:
@@ -953,6 +955,7 @@ class CachedLLMClient(BaseLLMClient):
             thinking_config=thinking_config,
             system_message=system_message,
             max_tokens=max_tokens,
+            without_cache=without_cache,
         ):
             # Accumulate content from each response chunk
             if response.candidates and response.candidates[0].content:
@@ -1054,6 +1057,7 @@ class CachedLLMClientAsync(BaseLLMClientAsync):
             thinking_config=thinking_config,
             system_message=system_message,
             max_tokens=max_tokens,
+            without_cache=without_cache,
         ):
             # Accumulate content from each response chunk
             if response.candidates and response.candidates[0].content:

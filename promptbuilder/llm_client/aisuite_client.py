@@ -74,6 +74,7 @@ class AiSuiteLLMClient(BaseLLMClient):
         timeout: float | None = None,
         tools: list[Tool] | None = None,
         tool_config: ToolConfig = ToolConfig(),
+        without_cache: bool = False
     ) -> Response:
         aisuite_messages: list[dict[str, str]] = []
         if system_message is not None:
@@ -234,6 +235,7 @@ class AiSuiteLLMClientAsync(BaseLLMClientAsync):
         timeout: float | None = None,
         tools: list[Tool] | None = None,
         tool_config: ToolConfig = ToolConfig(),
+        without_cache: bool = False
     ) -> Response:
         aisuite_messages: list[dict[str, str]] = []
         if system_message is not None:
