@@ -969,10 +969,16 @@ class CachedLLMClient(BaseLLMClient):
         
         # Save accumulated response to cache
         if final_response is not None and accumulated_content is not None and final_response.candidates:
-            cached_response = Response(
-                candidates=[final_response.candidates[0].model_copy(update={"content": accumulated_content})],
-                usage_metadata=final_response.usage_metadata,
-                parsed=final_response.parsed,
+            normalized_response = Response.model_validate(final_response.model_dump())
+            normalized_candidates = normalized_response.candidates
+            if not normalized_candidates:
+                return
+            cached_response = normalized_response.model_copy(
+                update={
+                    "candidates": [
+                        normalized_candidates[0].model_copy(update={"content": accumulated_content})
+                    ]
+                }
             )
             CachedLLMClient.save_cache(cache_path, self.llm_client.full_model_name, messages_dump, cached_response)
 
@@ -1044,36 +1050,47 @@ class CachedLLMClientAsync(BaseLLMClientAsync):
             system_message=system_message,
             max_tokens=max_tokens,
         )
-        if not without_cache and response is not None:
-            yield response
-            return
-        
-        accumulated_content: Content | None = None
-        final_response: Response | None = None
-        
-        async for response in self.llm_client._create_stream(
-            messages=messages,
-            result_type=result_type,
-            thinking_config=thinking_config,
-            system_message=system_message,
-            max_tokens=max_tokens,
-            without_cache=without_cache,
-        ):
-            # Accumulate content from each response chunk
-            if response.candidates and response.candidates[0].content:
-                response_text, is_thought = BaseLLMClient._responce_to_text(response)
-                if response_text is not None:
-                    if accumulated_content is None:
-                        accumulated_content = Content(parts=[], role="model")
-                    BaseLLMClient._append_to_message(accumulated_content, response_text, is_thought or False)
-            final_response = response
-            yield response
-        
-        # Save accumulated response to cache
-        if final_response is not None and accumulated_content is not None and final_response.candidates:
-            cached_response = Response(
-                candidates=[final_response.candidates[0].model_copy(update={"content": accumulated_content})],
-                usage_metadata=final_response.usage_metadata,
-                parsed=final_response.parsed,
-            )
-            CachedLLMClient.save_cache(cache_path, self.llm_client.full_model_name, messages_dump, cached_response)
+
+        async def cached_stream_iterator() -> AsyncIterator[Response]:
+            if not without_cache and response is not None:
+                yield response
+                return
+
+            accumulated_content: Content | None = None
+            final_response: Response | None = None
+
+            provider_stream = await cast(Awaitable[AsyncIterator[Response]], self.llm_client._create_stream(
+                messages=messages,
+                result_type=result_type,
+                thinking_config=thinking_config,
+                system_message=system_message,
+                max_tokens=max_tokens,
+                without_cache=without_cache,
+            ))
+            async for response_chunk in provider_stream:
+                # Accumulate content from each response chunk
+                if response_chunk.candidates and response_chunk.candidates[0].content:
+                    response_text, is_thought = BaseLLMClient._responce_to_text(response_chunk)
+                    if response_text is not None:
+                        if accumulated_content is None:
+                            accumulated_content = Content(parts=[], role="model")
+                        BaseLLMClient._append_to_message(accumulated_content, response_text, is_thought or False)
+                final_response = response_chunk
+                yield response_chunk
+
+            # Save accumulated response to cache
+            if final_response is not None and accumulated_content is not None and final_response.candidates:
+                normalized_response = Response.model_validate(final_response.model_dump())
+                normalized_candidates = normalized_response.candidates
+                if not normalized_candidates:
+                    return
+                cached_response = normalized_response.model_copy(
+                    update={
+                        "candidates": [
+                            normalized_candidates[0].model_copy(update={"content": accumulated_content})
+                        ]
+                    }
+                )
+                CachedLLMClient.save_cache(cache_path, self.llm_client.full_model_name, messages_dump, cached_response)
+
+        return cached_stream_iterator()
