@@ -1,14 +1,15 @@
 import pytest
 from unittest.mock import Mock, patch, AsyncMock
-from promptbuilder.llm_client import CachedLLMClientAsync
+from promptbuilder.llm_client import BaseLLMClientAsync, CachedLLMClientAsync
 from promptbuilder.llm_client import get_client, get_async_client
 from promptbuilder.llm_client.aisuite_client import AiSuiteLLMClientAsync
-from promptbuilder.llm_client.types import Completion, Choice, Message, Usage, Response, Candidate, Content, Part, UsageMetadata
+from promptbuilder.llm_client.types import Completion, Choice, Message, Usage, Response, Candidate, Content, Part, UsageMetadata, FinishReason
 import json
 import os
 import tempfile
 import shutil
 import asyncio
+from typing import AsyncIterator
 
 @pytest.fixture
 def mock_aisuite_client():
@@ -187,6 +188,52 @@ def temp_cache_dir():
 def cached_llm_client(llm_client, temp_cache_dir):
     return CachedLLMClientAsync(llm_client, cache_dir=temp_cache_dir)
 
+
+class FakeStreamingLLMClientAsync(BaseLLMClientAsync):
+    def __init__(self):
+        super().__init__(provider="test", model="stream-model")
+        self.stream_call_count = 0
+
+    @property
+    def api_key(self) -> str:
+        return "test-key"
+
+    async def _create(self, messages, result_type=None, **kwargs) -> Response:
+        return Response(
+            candidates=[
+                Candidate(
+                    content=Content(role="model", parts=[Part(text="cached stream response")]),
+                    finish_reason=FinishReason.STOP,
+                )
+            ],
+            usage_metadata=UsageMetadata(candidates_token_count=3, total_token_count=3),
+        )
+
+    async def _create_stream(
+        self,
+        messages,
+        result_type=None,
+        *,
+        thinking_config=None,
+        system_message=None,
+        max_tokens=None,
+        without_cache: bool = False,
+    ) -> AsyncIterator[Response]:
+        self.stream_call_count += 1
+
+        async def stream_iterator() -> AsyncIterator[Response]:
+            yield Response(
+                candidates=[
+                    Candidate(
+                        content=Content(role="model", parts=[Part(text="cached stream response")]),
+                        finish_reason=FinishReason.STOP,
+                    )
+                ],
+                usage_metadata=UsageMetadata(candidates_token_count=3, total_token_count=3),
+            )
+
+        return stream_iterator()
+
 @pytest.mark.asyncio
 async def test_cached_llm_client_first_call(cached_llm_client, mock_aisuite_client):
     """Test that first call to create() makes an actual API call and caches result"""
@@ -208,3 +255,27 @@ async def test_cached_llm_client_first_call(cached_llm_client, mock_aisuite_clie
     cache_files = os.listdir(cached_llm_client.cache_dir)
     assert len(cache_files) == 1
     assert cache_files[0].endswith('.json')
+
+
+@pytest.mark.asyncio
+async def test_cached_llm_client_create_stream_uses_provider_then_cache(temp_cache_dir):
+    inner_client = FakeStreamingLLMClientAsync()
+    cached_client = CachedLLMClientAsync(inner_client, cache_dir=temp_cache_dir)
+    messages = [Content(parts=[Part(text="Stream me")], role="user")]
+
+    first_chunks: list[str] = []
+    async for response in cached_client.create_stream(messages, autocomplete=True):
+        if response.text is not None:
+            first_chunks.append(response.text)
+
+    assert first_chunks == ["cached stream response"]
+    assert inner_client.stream_call_count == 1
+    assert len(os.listdir(temp_cache_dir)) == 1
+
+    second_chunks: list[str] = []
+    async for response in cached_client.create_stream(messages, autocomplete=True):
+        if response.text is not None:
+            second_chunks.append(response.text)
+
+    assert second_chunks == ["cached stream response"]
+    assert inner_client.stream_call_count == 1
